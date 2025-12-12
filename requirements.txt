@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+websockets
+google-genai
+python-multipart
+jinja2

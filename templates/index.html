@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Audio Chat (Ru/En)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify_content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            color: #1a73e8;
+            margin-bottom: 2rem;
+        }
+        .status {
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            background: #eee;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #e6f4ea;
+            color: #1e8e3e;
+        }
+        .status.disconnected {
+            background: #fce8e6;
+            color: #d93025;
+        }
+        button {
+            background: #1a73e8;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin: 10px;
+        }
+        button:hover {
+            background: #1557b0;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button.recording {
+            background: #d93025;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(217, 48, 37, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(217, 48, 37, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(217, 48, 37, 0); }
+        }
+        .visualizer {
+            width: 100%;
+            height: 60px;
+            background: #f1f3f4;
+            margin-top: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .bar {
+            width: 5px;
+            background: #1a73e8;
+            margin: 0 2px;
+            height: 10px;
+            transition: height 0.1s;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Audio Chat</h1>
+        <div id="status" class="status disconnected">Disconnected</div>
+        <p>Speak in Russian or English</p>
+        <button id="startBtn">Start Chat</button>
+        <button id="endBtn" disabled>End Chat</button>
+        
+        <div class="visualizer" id="visualizer">
+            <!-- Bars will be added by JS -->
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const endBtn = document.getElementById('endBtn');
+        const statusDiv = document.getElementById('status');
+        const visualizer = document.getElementById('visualizer');
+
+        // Setup visualizer bars
+        const numBars = 20;
+        const bars = [];
+        for (let i = 0; i < numBars; i++) {
+            const bar = document.createElement('div');
+            bar.className = 'bar';
+            visualizer.appendChild(bar);
+            bars.push(bar);
+        }
+
+        let audioContext;
+        let websocket;
+        let stream;
+        let processor;
+        let isRecording = false;
+        let nextStartTime = 0;
+
+        // Constants matching server config
+        const SEND_SAMPLE_RATE = 16000;
+        const RECEIVE_SAMPLE_RATE = 24000;
+
+        startBtn.onclick = startChat;
+        endBtn.onclick = endChat;
+
+        async function startChat() {
+            try {
+                startBtn.disabled = true;
+                statusDiv.innerText = 'Connecting...';
+                
+                // Initialize WebSocket
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                websocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
+
+                websocket.onopen = () => {
+                    statusDiv.innerText = 'Connected';
+                    statusDiv.className = 'status connected';
+                    endBtn.disabled = false;
+                    startAudio();
+                };
+
+                websocket.onmessage = handleMessage;
+
+                websocket.onclose = () => {
+                    statusDiv.innerText = 'Disconnected';
+                    statusDiv.className = 'status disconnected';
+                    stopAudio();
+                    startBtn.disabled = false;
+                    endBtn.disabled = true;
+                };
+
+                websocket.onerror = (error) => {
+                    console.error('WebSocket Error:', error);
+                    statusDiv.innerText = 'Error';
+                };
+
+            } catch (err) {
+                console.error('Error starting chat:', err);
+                statusDiv.innerText = 'Error starting chat';
+                startBtn.disabled = false;
+            }
+        }
+
+        async function startAudio() {
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({
+                    sampleRate: SEND_SAMPLE_RATE,
+                });
+                
+                // Get microphone access
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { 
+                        channelCount: 1, 
+                        sampleRate: SEND_SAMPLE_RATE 
+                    } 
+                });
+
+                const source = audioContext.createMediaStreamSource(stream);
+                
+                // Use ScriptProcessor for raw PCM access (worklet would be better for production but this is simpler)
+                processor = audioContext.createScriptProcessor(4096, 1, 1);
+                
+                source.connect(processor);
+                processor.connect(audioContext.destination); // Mute loopback? No, needed for processing to run in some browsers
+                // Wait, connecting to destination might cause feedback loop if not careful.
+                // Usually we connect to destination to hear ourselves or to keep the processor alive.
+                // To avoid hearing ourselves, we can connect to a GainNode with gain 0.
+                const gain = audioContext.createGain();
+                gain.gain.value = 0;
+                processor.connect(gain);
+                gain.connect(audioContext.destination);
+
+                processor.onaudioprocess = (e) => {
+                    if (websocket && websocket.readyState === WebSocket.OPEN) {
+                        const inputData = e.inputBuffer.getChannelData(0);
+                        
+                        // Convert Float32 to Int16 PCM
+                        const pcmData = new Int16Array(inputData.length);
+                        for (let i = 0; i < inputData.length; i++) {
+                            // Clamp and scale
+                            let s = Math.max(-1, Math.min(1, inputData[i]));
+                            pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                        }
+
+                        // Update visualizer (simple volume)
+                        updateVisualizer(inputData);
+
+                        // Send to server
+                        const base64String = arrayBufferToBase64(pcmData.buffer);
+                        websocket.send(JSON.stringify({
+                            type: 'audio',
+                            data: base64String
+                        }));
+                    }
+                };
+                
+                isRecording = true;
+                startBtn.classList.add('recording');
+
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                statusDiv.innerText = 'Mic Access Denied';
+            }
+        }
+
+        function handleMessage(event) {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'audio') {
+                playAudioChunk(msg.data);
+            }
+        }
+
+        function playAudioChunk(base64Data) {
+            if (!audioContext) return;
+
+            // Decode base64 to Int16
+            const raw = window.atob(base64Data);
+            const rawLength = raw.length;
+            const array = new Uint8Array(new ArrayBuffer(rawLength));
+            for(let i = 0; i < rawLength; i++) {
+                array[i] = raw.charCodeAt(i);
+            }
+            const pcm16 = new Int16Array(array.buffer);
+
+            // Convert Int16 to Float32
+            const float32 = new Float32Array(pcm16.length);
+            for (let i = 0; i < pcm16.length; i++) {
+                float32[i] = pcm16[i] / 32768;
+            }
+
+            // Create buffer
+            const audioBuffer = audioContext.createBuffer(1, float32.length, RECEIVE_SAMPLE_RATE);
+            audioBuffer.getChannelData(0).set(float32);
+
+            // Schedule playback
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+
+            // Basic scheduling to prevent overlap/gaps
+            const currentTime = audioContext.currentTime;
+            if (nextStartTime < currentTime) {
+                nextStartTime = currentTime;
+            }
+            
+            source.start(nextStartTime);
+            nextStartTime += audioBuffer.duration;
+        }
+
+        function endChat() {
+            if (websocket) {
+                websocket.close();
+            }
+            stopAudio();
+            startBtn.disabled = false;
+            endBtn.disabled = true;
+            statusDiv.innerText = 'Disconnected';
+            statusDiv.className = 'status disconnected';
+            startBtn.classList.remove('recording');
+        }
+
+        function stopAudio() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            if (processor) {
+                processor.disconnect();
+            }
+            if (audioContext) {
+                audioContext.close();
+            }
+            isRecording = false;
+        }
+
+        function arrayBufferToBase64(buffer) {
+            let binary = '';
+            const bytes = new Uint8Array(buffer);
+            const len = bytes.byteLength;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
+        function updateVisualizer(data) {
+            // Calculate a volume level manually since we have the data
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) {
+                sum += Math.abs(data[i]);
+            }
+            const volume = sum / data.length;
+            
+            // Randomly animate bars based on volume
+            bars.forEach(bar => {
+                const height = Math.min(100, Math.max(10, volume * 500 + Math.random() * 20));
+                bar.style.height = height + '%';
+            });
+        }
+    </script>
+</body>
+</html>
