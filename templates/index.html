@@ -5,6 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Audio Chat (Ru/En)</title>
     <style>
+        #chatCreator, #chatList {
+            margin-bottom: 20px;
+            background: white;
+            padding: 1rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        #chatList {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+        .card {
+            background: #f0f2f5;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: opacity 0.3s;
+            position: relative;
+            overflow: hidden;
+            width: 200px;
+            height: 250px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .card:hover {
+            opacity: 0.9;
+        }
+        .card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .card-content {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            color: white;
+            padding: 10px;
+            font-size: 14px;
+        }
+        .card h3 {
+            margin: 0 0 5px 0;
+            font-size: 16px;
+        }
+        .card p {
+            margin: 0;
+            font-size: 12px;
+            color: #ccc;
+        }
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 12px;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            z-index: 10;
+        }
+        .delete-btn:hover {
+            background: #c82333;
+        }
+        #chatContainer {
+            display: none;
+        }
+    </style>
+    <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
@@ -91,19 +169,140 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div id="chatCreator">
+        <h2>Create New Chat</h2>
+        <textarea id="promptInput" rows="3" cols="50" placeholder="Describe person\situation, use female\male (e.g., 'old pirate male')"></textarea>
+        <button id="createChatBtn">Create Chat</button>
+    </div>
+    <div id="chatList">
+        <!-- Cards will be added by JS -->
+    </div>
+    <div class="container" id="chatContainer">
         <h1>AI Audio Chat</h1>
+        <img id="chatImage" style="width: 100%; margin-bottom: 10px; border-radius: 10px;" />
         <div id="status" class="status disconnected">Disconnected</div>
-        <p>Speak in Russian or English</p>
         <button id="startBtn">Start Chat</button>
         <button id="endBtn" disabled>End Chat</button>
-        
+
         <div class="visualizer" id="visualizer">
             <!-- Bars will be added by JS -->
         </div>
     </div>
 
     <script>
+        (async () => {
+        let currentChatId = null;
+            let chatsData = {};
+
+            // Chat management
+            const chatList = document.getElementById('chatList');
+            const createChatBtn = document.getElementById('createChatBtn');
+            const promptInput = document.getElementById('promptInput');
+            const addedChatIds = new Set();
+
+            // Initialize with default chat - but removed at user request
+
+            async function loadChats() {
+                try {
+                    const response = await fetch('/chats');
+                    chatsData = await response.json();
+                    for (const [chatId, info] of Object.entries(chatsData)) {
+                    if (chatId !== 'default') {
+                        const title = `Chat ${chatList.children.length}`;
+                        addCard(chatId, title, info.prompt, info.voice, info.image_url);
+                    }
+                    }
+                } catch (e) {
+                    console.error('Error loading chats:', e);
+                }
+            }
+
+            function addCard(chatId, title, prompt, voice = 'Zephyr', image_url = '') {
+                if (addedChatIds.has(chatId)) return;
+                addedChatIds.add(chatId);
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.dataset.chatId = chatId;
+                const deleteBtn = chatId !== 'default' ? `<button class="delete-btn">✕</button>` : '';
+                const backgroundImage = image_url || 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="250" viewBox="0 0 200 250"><rect width="200" height="250" fill="#ddd"/><text x="100" y="125" font-family="Arial" font-size="20" text-anchor="middle" fill="#666">No Image</text></svg>');
+                card.innerHTML = `
+                    <img src="${backgroundImage}" alt="Chat Image" />
+                    <div class="card-content">
+                        <h3></h3>
+                        <p>${prompt}</p>
+                    </div>
+                    ${deleteBtn}
+                `;
+                card.addEventListener('click', () => startChatWith(chatId));
+                const delBtn = card.querySelector('.delete-btn');
+                if (delBtn) {
+                    delBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteChat(chatId, card);
+                    });
+                }
+                chatList.appendChild(card);
+            }
+
+            async function deleteChat(chatId, card) {
+                try {
+                    const response = await fetch('/delete_chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chat_id: chatId })
+                    });
+                    if (response.ok) {
+                        card.remove();
+                        addedChatIds.delete(chatId);
+                    }
+                } catch (e) {
+                    console.error('Error deleting chat:', e);
+                }
+            }
+
+            // Load additional chats from server
+            await loadChats();
+
+            createChatBtn.onclick = async () => {
+                const prompt = promptInput.value.trim();
+                if (prompt) {
+                    createChatBtn.disabled = true;
+                    promptInput.disabled = true;
+                    createChatBtn.textContent = 'Creating...';
+                    try {
+                        const response = await fetch('/create_chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ prompt })
+                        });
+                        const { chat_id: chatId, voice, image_url } = await response.json();
+                        addCard(chatId, `Chat ${chatList.children.length}`, prompt, voice, image_url);
+                        promptInput.value = '';
+                    } catch (e) {
+                        console.error('Error creating chat:', e);
+                    } finally {
+                        createChatBtn.disabled = false;
+                        promptInput.disabled = false;
+                        createChatBtn.textContent = 'Create Chat';
+                    }
+                }
+            };
+
+        function startChatWith(chatId) {
+            currentChatId = chatId;
+            const imgEl = document.getElementById('chatImage');
+            if (chatsData[chatId] && chatsData[chatId].image_url) {
+                imgEl.src = chatsData[chatId].image_url;
+                imgEl.style.display = 'block';
+            } else {
+                imgEl.style.display = 'none';
+            }
+            document.getElementById('chatList').style.display = 'none';
+            document.getElementById('chatCreator').style.display = 'none';
+            document.getElementById('chatContainer').style.display = 'block';
+            startChat();
+        }
+
         const startBtn = document.getElementById('startBtn');
         const endBtn = document.getElementById('endBtn');
         const statusDiv = document.getElementById('status');
@@ -143,6 +342,11 @@
                 websocket = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
                 websocket.onopen = () => {
+                    // Send initialize message with chat_id
+                    websocket.send(JSON.stringify({
+                        type: "initialize",
+                        chat_id: currentChatId
+                    }));
                     statusDiv.innerText = 'Connected';
                     statusDiv.className = 'status connected';
                     endBtn.disabled = false;
@@ -287,6 +491,10 @@
             statusDiv.innerText = 'Disconnected';
             statusDiv.className = 'status disconnected';
             startBtn.classList.remove('recording');
+            // Back to chat list
+            document.getElementById('chatContainer').style.display = 'none';
+            document.getElementById('chatList').style.display = 'grid';
+            document.getElementById('chatCreator').style.display = 'block';
         }
 
         function stopAudio() {
@@ -296,8 +504,8 @@
             if (processor) {
                 processor.disconnect();
             }
-            if (audioContext) {
-                audioContext.close();
+            if (audioContext && audioContext.state !== 'closed') {
+                audioContext.close().catch(() => {});
             }
             isRecording = false;
         }
@@ -319,13 +527,14 @@
                 sum += Math.abs(data[i]);
             }
             const volume = sum / data.length;
-            
+
             // Randomly animate bars based on volume
             bars.forEach(bar => {
                 const height = Math.min(100, Math.max(10, volume * 500 + Math.random() * 20));
                 bar.style.height = height + '%';
             });
         }
+        })();
     </script>
 </body>
 </html>

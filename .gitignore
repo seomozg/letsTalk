@@ -45,3 +45,5 @@ nginx/ssl/
 # Temporary files
 tmp/
 temp/
+run_server.bat
+run_server.bat
