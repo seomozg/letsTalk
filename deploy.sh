@@ -14,7 +14,7 @@ fi
 
 # Load environment variables
 set -a
-source .env
+. .env
 set +a
 
 # Check if GEMINI_API_KEY is set
@@ -22,6 +22,12 @@ if [ -z "$GEMINI_API_KEY" ] || [ "$GEMINI_API_KEY" = "your_gemini_api_key_here" 
     echo "❌ GEMINI_API_KEY not set in .env file!"
     echo "📝 Get your API key from https://aistudio.google.com/app/apikey"
     exit 1
+fi
+
+# Check if KIE_API_KEY is set (optional)
+if [ -z "$KIE_API_KEY" ]; then
+    echo "⚠️  KIE_API_KEY not set in .env file!"
+    echo "💡 Image generation will be disabled. Set KIE_API_KEY for AI-generated chat images."
 fi
 
 echo "📦 Building and starting containers..."
