@@ -46,4 +46,4 @@ nginx/ssl/
 tmp/
 temp/
 run_server.bat
-run_server.bat
+chats.json

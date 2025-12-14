@@ -73,6 +73,8 @@ cp /path/to/key.pem nginx/ssl/
 - 🐳 **Docker deployment** - Containerized for easy hosting
 - 🔒 **HTTPS security** - SSL/TLS encryption required
 - 🏗️ **Production ready** - Nginx reverse proxy, health checks
+- 🗣️ **Multiple personas** - Create custom chat characters with unique voices and images
+- 🎨 **AI image generation** - Automatic avatar creation for new chats using Kie.ai
 
 ## 🏗️ Architecture
 
@@ -100,6 +102,7 @@ cp /path/to/key.pem nginx/ssl/
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GEMINI_API_KEY` | - | **Required** - Your Gemini API key |
+| `KIE_API_KEY` | - | **Optional** - Your Kie.ai API key for image generation |
 | `PORT` | 8000 | Server port |
 | `HOST` | 0.0.0.0 | Host binding |
 
