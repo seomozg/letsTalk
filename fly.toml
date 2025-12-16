@@ -1,5 +1,5 @@
-app = "letstalk"
-primary_region = "sin"
+app = "letstalk-ai-chat"
+primary_region = "iad"
 
 [build]
   dockerfile = "Dockerfile"

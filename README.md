@@ -66,7 +66,7 @@ Multi-language (Russian/English) real-time AI voice chat web application.
    ```
 
 5. **Access Your App**
-   - Your app will be available at: `https://letstalk.fly.dev` (or custom domain if configured)
+   - Your app will be available at: `https://letstalk-ai-chat.fly.dev` (or custom domain if configured)
    - Fly.io automatically provides HTTPS
 
 ### Option 2: Docker Compose Deployment
