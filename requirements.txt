@@ -4,3 +4,5 @@ websockets
 google-genai
 python-multipart
 jinja2
+python-dotenv
+requests
