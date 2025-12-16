@@ -5,12 +5,15 @@ import base64
 import logging
 import uuid as uuid
 import httpx
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, Request, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from google import genai
 from google.genai import types
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

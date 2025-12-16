@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Deploy script for AI Audio Chat
 set -e
@@ -6,23 +6,20 @@ set -e
 echo "🚀 Deploying AI Audio Chat..."
 
 # Check if .env file exists
-if [ ! -f .env ]; then
-    echo "❌ .env file not found!"
-    echo "📝 Copy .env.template to .env and fill in your API key"
-    exit 1
-fi
+# if [ ! -f .env ]; then
+#     echo "❌ .env file not found!"
+#     echo "📝 Copy .env.example to .env and fill in your API keys (GEMINI_API_KEY, KIE_API_KEY)"
+#     exit 1
+# fi
 
 # Load environment variables
-set -a
-source .env
-set +a
+# set -a
+# . .env
+# set +a
+# Environment variables should be loaded by docker-compose from .env file
 
-# Check if GEMINI_API_KEY is set
-if [ -z "$GEMINI_API_KEY" ] || [ "$GEMINI_API_KEY" = "your_gemini_api_key_here" ]; then
-    echo "❌ GEMINI_API_KEY not set in .env file!"
-    echo "📝 Get your API key from https://aistudio.google.com/app/apikey"
-    exit 1
-fi
+# API key checks removed - assuming .env is properly configured
+# Docker-compose will load environment from .env file
 
 echo "📦 Building and starting containers..."
 

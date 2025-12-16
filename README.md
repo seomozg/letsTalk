@@ -18,7 +18,7 @@ Multi-language (Russian/English) real-time AI voice chat web application.
 
 2. **Create environment file**
    ```bash
-   cp .env.template .env
+   cp .env.example .env
    ```
 
 3. **Edit `.env` file**
@@ -38,31 +38,64 @@ Multi-language (Russian/English) real-time AI voice chat web application.
 
 ## 🏭 Production Deployment
 
-### 1. Environment Setup
-```bash
-cp .env.template .env
-# Edit .env with your API key and production settings
-```
+### Option 1: Fly.io Deployment (Recommended)
 
-### 2. SSL Certificates (Required for microphone access)
-```bash
-# Option 1: Let's Encrypt (recommended)
-sudo certbot certonly --standalone -d your-domain.com
+1. **Install Fly CLI**
+   ```bash
+   # Install Fly CLI (if not already installed)
+   curl -L https://fly.io/install.sh | sh
+   ```
 
-# Option 2: Copy existing certificates
-mkdir -p nginx/ssl
-cp /path/to/cert.pem nginx/ssl/
-cp /path/to/key.pem nginx/ssl/
-```
+2. **Authenticate with Fly**
+   ```bash
+   fly auth login
+   ```
 
-### 3. Deploy Production
-```bash
-./deploy.sh prod
-```
+3. **Set Application Secrets**
+   ```bash
+   # Required: Set your Gemini API key
+   fly secrets set GEMINI_API_KEY=your_actual_gemini_api_key_here
 
-### 4. Access
-- HTTPS: https://your-domain.com
-- HTTP redirects to HTTPS automatically
+   # Optional: Set Kie.ai API key for image generation
+   fly secrets set KIE_API_KEY=your_kie_api_key_here
+   ```
+
+4. **Deploy to Fly.io**
+   ```bash
+   fly deploy
+   ```
+
+5. **Access Your App**
+   - Your app will be available at: `https://letstalk.fly.dev` (or custom domain if configured)
+   - Fly.io automatically provides HTTPS
+
+### Option 2: Docker Compose Deployment
+
+1. **Environment Setup**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your API key and production settings
+   ```
+
+2. **SSL Certificates (Required for microphone access)**
+   ```bash
+   # Option 1: Let's Encrypt (recommended)
+   sudo certbot certonly --standalone -d your-domain.com
+
+   # Option 2: Copy existing certificates
+   mkdir -p nginx/ssl
+   cp /path/to/cert.pem nginx/ssl/
+   cp /path/to/key.pem nginx/ssl/
+   ```
+
+3. **Deploy Production**
+   ```bash
+   ./deploy.sh prod
+   ```
+
+4. **Access**
+   - HTTPS: https://your-domain.com
+   - HTTP redirects to HTTPS automatically
 
 ## 📋 Features
 
