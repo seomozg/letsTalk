@@ -54,8 +54,8 @@ chats = {}
 
 def load_chats():
     global chats
-    if os.path.exists('chats.json'):
-        with open('chats.json', 'r') as f:
+    if os.path.exists('data/chats.json'):
+        with open('data/chats.json', 'r') as f:
             saved_chats = json.load(f)
             for chat_id, data in saved_chats.items():
                 if isinstance(data, dict) and "prompt" in data:
@@ -140,8 +140,9 @@ async def generate_image(prompt):
         return ""
 
 def save_chats():
+    os.makedirs('data', exist_ok=True)
     saved_chats = {cid: {"prompt": data["prompt"], "voice": data.get("voice", "Zephyr"), "image_url": data.get("image_url", "")} for cid, data in chats.items() if cid != "default" and "voice" in data}
-    with open('chats.json', 'w') as f:
+    with open('data/chats.json', 'w') as f:
         json.dump(saved_chats, f)
 
 def choose_voice(prompt):
