@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for letstalk on 2025-12-16T13:09:39Z
+# fly.toml app configuration file generated for letstalk on 2025-12-19T00:30:58Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -13,8 +13,7 @@ primary_region = 'iad'
   force_https = true
   auto_stop_machines = 'stop'
   auto_start_machines = true
-  auto_stop_machines = false
-  min_machines_running = 1
+  min_machines_running = 0
   processes = ['app']
 
 [[vm]]
@@ -22,7 +21,3 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 1024
-
-[mounts]
-  source = "data"
-  destination = "/data"
