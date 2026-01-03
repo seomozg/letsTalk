@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Audio Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-white min-h-screen">
+    <div class="min-h-screen flex flex-col">
+        <!-- Header -->
+        <header class="bg-gray-800 shadow-lg">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-4">
+                    <h1 class="text-3xl font-bold text-white">🎤 AI Audio Chat</h1>
+                    <select id="languageSelect" class="text-sm bg-gray-700 border border-gray-600 rounded text-white px-2 py-1">
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ru">Russian</option>
+                        <option value="ja">Japanese</option>
+                        <option value="de">German</option>
+                        <option value="ko">Korean</option>
+                        <option value="fr">French</option>
+                    </select>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Chat Creator -->
+            <div id="chatCreator" class="bg-gray-800 rounded-xl shadow-lg p-6 mb-8 max-w-md mx-auto">
+                <h2 class="text-xl font-semibold text-white mb-4" data-key="createChat">Create New Chat</h2>
+                <textarea id="promptInput" rows="3" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" data-key="promptPlaceholder" placeholder="Describe person/situation, use female/male (e.g., 'old pirate male')"></textarea>
+                <button id="createChatBtn" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200" data-key="createBtn">Create Chat</button>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-4 mb-6 max-w-md mx-auto">
+                <label class="block text-sm font-medium text-white mb-2" data-key="filterLabel">Filter by Voice</label>
+                <select id="filterSelect" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">All</option>
+                    <option value="Zephyr">Zephyr</option>
+                    <option value="Puck">Puck</option>
+                    <option value="Umbriel">Umbriel</option>
+                    <option value="Leda">Leda</option>
+                    <option value="Enceladus">Enceladus</option>
+                    <option value="Orus">Orus</option>
+                    <option value="Aoede">Aoede</option>
+                    <option value="Fenrir">Fenrir</option>
+                    <option value="Kore">Kore</option>
+                    <option value="Charon">Charon</option>
+                    <option value="Erinome">Erinome</option>
+                    <option value="Iapetus">Iapetus</option>
+                </select>
+            </div>
+
+            <!-- Chat List -->
+            <div id="chatList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Cards will be added by JS -->
+            </div>
+        </main>
+    </div>
+
+    <script src="/templates/translations.js"></script>
+    <script>
+        (async () => {
+        let currentChatId = null;
+            let chatsData = {};
+            let userLocation = null;
+
+            // Declare UI elements early
+            const languageSelect = document.getElementById('languageSelect');
+            const chatList = document.getElementById('chatList');
+            const createChatBtn = document.getElementById('createChatBtn');
+            const promptInput = document.getElementById('promptInput');
+            const filterSelect = document.getElementById('filterSelect');
+
+            let currentLang = 'en';
+
+            function updateInterfaceLanguage(lang) {
+                currentLang = lang;
+                const t = translations[lang] || translations.en;
+                document.querySelector('h1').innerText = `🎤 ${t.title}`;
+                document.querySelector('[data-key="createChat"]').innerText = t.createChat;
+                promptInput.placeholder = t.promptPlaceholder;
+                document.querySelector('[data-key="createBtn"]').innerText = t.createBtn;
+                document.querySelector('[data-key="filterLabel"]').innerText = t.filterLabel;
+            }
+
+            languageSelect.addEventListener('change', () => updateInterfaceLanguage(languageSelect.value));
+
+            async function detectLanguageFromLocation(lat, lng) {
+                try {
+                    const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+                    const data = await response.json();
+                    const countryCode = data.countryCode;
+                    const detectedLang = countryToLang[countryCode] || 'en';
+                    languageSelect.value = detectedLang;
+                    updateInterfaceLanguage(detectedLang);
+                } catch (e) {
+                    console.error('Geocode error:', e);
+                    updateInterfaceLanguage('en');
+                }
+            }
+
+            // Get user geolocation
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        console.log('User location:', userLocation);
+                        detectLanguageFromLocation(userLocation.lat, userLocation.lng);
+                    },
+                    (error) => {
+                        console.error('Geolocation error:', error);
+                        updateInterfaceLanguage('en');
+                    }
+                );
+            } else {
+                console.error('Geolocation not supported');
+                updateInterfaceLanguage('en');
+            }
+
+            // Chat management
+            const addedChatIds = new Set();
+
+            async function loadChats() {
+                try {
+                    const response = await fetch('/chats');
+                    chatsData = await response.json();
+                    for (const [chatId, info] of Object.entries(chatsData)) {
+                    if (chatId !== 'default') {
+                        const title = `Chat ${chatList.children.length}`;
+                        addCard(chatId, title, info.prompt, info.voice, info.image_url, info.likes || 0);
+                    }
+                    }
+                } catch (e) {
+                    console.error('Error loading chats:', e);
+                }
+            }
+
+            function addCard(chatId, title, prompt, voice = 'Zephyr', image_url = '', likes = 0) {
+                if (addedChatIds.has(chatId)) return;
+                addedChatIds.add(chatId);
+                const card = document.createElement('div');
+                card.className = 'card bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer relative group';
+                card.dataset.chatId = chatId;
+                const deleteBtn = chatId !== 'default' ? `<button class="absolute top-3 right-3 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">✕</button>` : '';
+                const backgroundImage = image_url || 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="#f3f4f6"/><circle cx="150" cy="80" r="30" fill="#d1d5db"/><path d="M130 110 Q150 130 170 110" stroke="#d1d5db" stroke-width="3" fill="none"/><text x="150" y="170" font-family="Arial" font-size="16" text-anchor="middle" fill="#6b7280">No Image</text></svg>');
+                card.innerHTML = `
+                    <div class="aspect-video relative">
+                        <img src="${backgroundImage}" alt="Chat Image" class="w-full h-full object-cover" />
+                        ${deleteBtn}
+                    </div>
+                    <div class="p-4">
+                        <p class="text-gray-300 text-sm leading-relaxed">${prompt}</p>
+                        <div class="mt-2 text-xs text-gray-400">${voice}</div>
+                        <div class="flex items-center mt-2">
+                            <button class="like-btn text-red-500 hover:text-red-600 mr-2">❤️</button>
+                            <span class="likes-count text-sm text-gray-400">${likes}</span>
+                        </div>
+                    </div>
+                `;
+                card.addEventListener('click', () => window.location.href = `/chat/${chatId}`);
+                const delBtn = card.querySelector('button');
+                if (delBtn) {
+                    delBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        deleteChat(chatId, card);
+                    });
+                }
+                const likeBtn = card.querySelector('.like-btn');
+                const likesCount = card.querySelector('.likes-count');
+                likeBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    try {
+                        const response = await fetch('/like_chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ chat_id: chatId })
+                        });
+                        const data = await response.json();
+                        if (data.likes !== undefined) {
+                            likesCount.textContent = data.likes;
+                        } else if (data.error) {
+                            alert(data.error);
+                        }
+                    } catch (err) {
+                        console.error('Like error:', err);
+                    }
+                });
+                chatList.appendChild(card);
+            }
+
+            async function deleteChat(chatId, card) {
+                try {
+                    const response = await fetch('/delete_chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ chat_id: chatId })
+                    });
+                    if (response.ok) {
+                        card.remove();
+                        addedChatIds.delete(chatId);
+                    }
+                } catch (e) {
+                    console.error('Error deleting chat:', e);
+                }
+            }
+
+            // Load additional chats from server
+            await loadChats();
+            filterCards(); // Apply initial filter
+
+            filterSelect.addEventListener('change', filterCards);
+
+            function filterCards() {
+                const selectedVoice = filterSelect.value;
+                const cards = chatList.querySelectorAll('.card');
+                cards.forEach(card => {
+                    const voiceEl = card.querySelector('.text-xs');
+                    const voice = voiceEl ? voiceEl.textContent : '';
+                    card.style.display = (selectedVoice === '' || voice === selectedVoice) ? 'block' : 'none';
+                });
+            }
+
+            async function translatePrompt(prompt, fromLang) {
+                try {
+                    const response = await fetch('/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: prompt, from_lang: fromLang })
+                    });
+                    const data = await response.json();
+                    return data.translated || prompt;
+                } catch (e) {
+                    console.error('Translation error:', e);
+                    return prompt; // Fallback to original
+                }
+            }
+
+            createChatBtn.onclick = async () => {
+                const prompt = promptInput.value.trim();
+                const selectedLang = languageSelect.value;
+                if (prompt) {
+                    createChatBtn.disabled = true;
+                    promptInput.disabled = true;
+                    createChatBtn.textContent = 'Creating...';
+                    try {
+                        let finalPrompt = await translatePrompt(prompt, selectedLang);
+                        const response = await fetch('/create_chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ prompt: finalPrompt })
+                        });
+                        const { chat_id: chatId, voice, image_url } = await response.json();
+                        addCard(chatId, `Chat ${chatList.children.length}`, finalPrompt, voice, image_url);
+                        promptInput.value = '';
+                    } catch (e) {
+                        console.error('Error creating chat:', e);
+                    } finally {
+                        createChatBtn.disabled = false;
+                        promptInput.disabled = false;
+                        createChatBtn.textContent = 'Create Chat';
+                    }
+                }
+            };
+
+        })();
+    </script>
+</body>
+</html>

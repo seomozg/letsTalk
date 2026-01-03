@@ -9,7 +9,7 @@
         .visualizer {
             width: 100%;
             height: 60px;
-            background: #f1f3f4;
+            background: #374151;
             margin-top: 20px;
             border-radius: 10px;
             overflow: hidden;
@@ -26,14 +26,23 @@
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-white min-h-screen">
     <div class="min-h-screen flex flex-col">
         <!-- Header -->
-        <header class="bg-white shadow-lg">
+        <header class="bg-gray-800 shadow-lg">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div class="flex justify-between items-center py-4">
-                    <h1 class="text-3xl font-bold text-gray-900">🎤 AI Audio Chat</h1>
-                    <div class="text-sm text-gray-500">Ru/En</div>
+                    <h1 class="text-3xl font-bold text-white">🎤 AI Audio Chat</h1>
+                    <select id="languageSelect" class="text-sm bg-gray-700 border border-gray-600 rounded text-white px-2 py-1">
+                        <option value="en">English</option>
+                        <option value="es">Spanish</option>
+                        <option value="pt">Portuguese</option>
+                        <option value="ru">Russian</option>
+                        <option value="ja">Japanese</option>
+                        <option value="de">German</option>
+                        <option value="ko">Korean</option>
+                        <option value="fr">French</option>
+                    </select>
                 </div>
             </div>
         </header>
@@ -41,10 +50,30 @@
         <!-- Main Content -->
         <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Chat Creator -->
-            <div id="chatCreator" class="bg-white rounded-xl shadow-lg p-6 mb-8 max-w-md mx-auto">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">Create New Chat</h2>
-                <textarea id="promptInput" rows="3" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" placeholder="Describe person/situation, use female/male (e.g., 'old pirate male')"></textarea>
-                <button id="createChatBtn" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200">Create Chat</button>
+            <div id="chatCreator" class="bg-gray-800 rounded-xl shadow-lg p-6 mb-8 max-w-md mx-auto">
+                <h2 class="text-xl font-semibold text-white mb-4" data-key="createChat">Create New Chat</h2>
+                <textarea id="promptInput" rows="3" class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" data-key="promptPlaceholder" placeholder="Describe person/situation, use female/male (e.g., 'old pirate male')"></textarea>
+                <button id="createChatBtn" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200" data-key="createBtn">Create Chat</button>
+            </div>
+
+            <!-- Filters -->
+            <div class="bg-gray-800 rounded-xl shadow-lg p-4 mb-6 max-w-md mx-auto">
+                <label class="block text-sm font-medium text-white mb-2">Filter by Voice:</label>
+                <select id="filterSelect" class="w-full p-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="">All</option>
+                    <option value="Zephyr">Zephyr</option>
+                    <option value="Puck">Puck</option>
+                    <option value="Umbriel">Umbriel</option>
+                    <option value="Leda">Leda</option>
+                    <option value="Enceladus">Enceladus</option>
+                    <option value="Orus">Orus</option>
+                    <option value="Aoede">Aoede</option>
+                    <option value="Fenrir">Fenrir</option>
+                    <option value="Kore">Kore</option>
+                    <option value="Charon">Charon</option>
+                    <option value="Erinome">Erinome</option>
+                    <option value="Iapetus">Iapetus</option>
+                </select>
             </div>
 
             <!-- Chat List -->
@@ -53,7 +82,7 @@
             </div>
 
             <!-- Chat Container -->
-            <div class="bg-white rounded-xl shadow-lg p-8 max-w-2xl mx-auto" id="chatContainer" style="display: none;">
+            <div class="bg-gray-800 rounded-xl shadow-lg p-8 max-w-2xl mx-auto" id="chatContainer" style="display: none;">
                 <div class="text-center">
                     <img id="chatImage" class="w-48 h-48 object-cover rounded-full mx-auto mb-6 border-4 border-gray-200" style="display: none;" />
                     <div id="status" class="inline-block px-4 py-2 rounded-full text-sm font-medium mb-6 status disconnected">Disconnected</div>
@@ -64,6 +93,11 @@
                     <div class="visualizer" id="visualizer">
                         <!-- Bars will be added by JS -->
                     </div>
+                    <div class="mt-8 text-center">
+                        <p class="text-sm text-gray-400 mb-2">Support the project:</p>
+                        <img src="/static/qr.png" alt="Donate USDT: TAMgnFiNycW9xx1zJHC6v1JWqpvhfoWwce" class="w-32 h-32 mx-auto" />
+                        <p class="text-xs text-gray-500 mt-2">USDT: TAMgnFiNycW9xx1zJHC6v1JWqpvhfoWwce</p>
+                    </div>
                 </div>
             </div>
         </main>
@@ -73,11 +107,196 @@
         (async () => {
         let currentChatId = null;
             let chatsData = {};
+            let userLocation = null;
 
-            // Chat management
+            // Declare UI elements early
+            const languageSelect = document.getElementById('languageSelect');
             const chatList = document.getElementById('chatList');
             const createChatBtn = document.getElementById('createChatBtn');
             const promptInput = document.getElementById('promptInput');
+            const startBtn = document.getElementById('startBtn');
+            const endBtn = document.getElementById('endBtn');
+            const statusDiv = document.getElementById('status');
+            const visualizer = document.getElementById('visualizer');
+            const filterSelect = document.getElementById('filterSelect');
+
+            const translations = {
+                en: {
+                    title: "AI Audio Chat",
+                    createChat: "Create New Chat",
+                    promptPlaceholder: "Describe person/situation, use female/male (e.g., 'old pirate male')",
+                    createBtn: "Create Chat",
+                    filterLabel: "Filter by Voice",
+                    startChat: "🎙️ Start Chat",
+                    endChat: "⏹️ End Chat",
+                    disconnected: "Disconnected",
+                    connected: "Connected",
+                    connecting: "Connecting...",
+                    error: "Error",
+                    micDenied: "Mic Access Denied"
+                },
+                es: {
+                    title: "Chat de Audio IA",
+                    createChat: "Crear Nuevo Chat",
+                    promptPlaceholder: "Describe persona/situación, usa female/male (ej. 'viejo pirata male')",
+                    createBtn: "Crear Chat",
+                    filterLabel: "Filtrar por Voz",
+                    startChat: "🎙️ Iniciar Chat",
+                    endChat: "⏹️ Terminar Chat",
+                    disconnected: "Desconectado",
+                    connected: "Conectado",
+                    connecting: "Conectando...",
+                    error: "Error",
+                    micDenied: "Acceso al Micrófono Denegado"
+                },
+                pt: {
+                    title: "Chat de Áudio IA",
+                    createChat: "Criar Novo Chat",
+                    promptPlaceholder: "Descreva pessoa/situação, use female/male (ex. 'velho pirata male')",
+                    createBtn: "Criar Chat",
+                    filterLabel: "Filtrar por Voz",
+                    startChat: "🎙️ Iniciar Chat",
+                    endChat: "⏹️ Terminar Chat",
+                    disconnected: "Desconectado",
+                    connected: "Conectado",
+                    connecting: "Conectando...",
+                    error: "Erro",
+                    micDenied: "Acesso ao Microfone Negado"
+                },
+                ru: {
+                    title: "AI Аудио Чат",
+                    createChat: "Создать Новый Чат",
+                    promptPlaceholder: "Опишите человека/ситуацию, используйте female/male (прим. 'старый пират male')",
+                    createBtn: "Создать Чат",
+                    filterLabel: "Фильтр по Голосу",
+                    startChat: "🎙️ Начать Чат",
+                    endChat: "⏹️ Завершить Чат",
+                    disconnected: "Отключено",
+                    connected: "Подключено",
+                    connecting: "Подключение...",
+                    error: "Ошибка",
+                    micDenied: "Доступ к Микрофону Запрещен"
+                },
+                ja: {
+                    title: "AI オーディオチャット",
+                    createChat: "新しいチャットを作成",
+                    promptPlaceholder: "人/状況を説明し、female/maleを使用 (例 'old pirate male')",
+                    createBtn: "チャットを作成",
+                    filterLabel: "声でフィルタ",
+                    startChat: "🎙️ チャットを開始",
+                    endChat: "⏹️ チャットを終了",
+                    disconnected: "切断",
+                    connected: "接続",
+                    connecting: "接続中...",
+                    error: "エラー",
+                    micDenied: "マイクアクセス拒否"
+                },
+                de: {
+                    title: "KI Audio Chat",
+                    createChat: "Neuen Chat Erstellen",
+                    promptPlaceholder: "Beschreibe Person/Situation, verwende female/male (z.B. 'alter Pirat male')",
+                    createBtn: "Chat Erstellen",
+                    filterLabel: "Nach Stimme Filtern",
+                    startChat: "🎙️ Chat Starten",
+                    endChat: "⏹️ Chat Beenden",
+                    disconnected: "Getrennt",
+                    connected: "Verbunden",
+                    connecting: "Verbinde...",
+                    error: "Fehler",
+                    micDenied: "Mikrofonzugriff Verweigert"
+                },
+                ko: {
+                    title: "AI 오디오 채팅",
+                    createChat: "새 채팅 만들기",
+                    promptPlaceholder: "사람/상황을 설명하고 female/male 사용 (예 'old pirate male')",
+                    createBtn: "채팅 만들기",
+                    filterLabel: "목소리로 필터",
+                    startChat: "🎙️ 채팅 시작",
+                    endChat: "⏹️ 채팅 종료",
+                    disconnected: "연결 끊김",
+                    connected: "연결됨",
+                    connecting: "연결 중...",
+                    error: "오류",
+                    micDenied: "마이크 액세스 거부"
+                },
+                fr: {
+                    title: "Chat Audio IA",
+                    createChat: "Créer Nouveau Chat",
+                    promptPlaceholder: "Décrivez personne/situation, utilisez female/male (ex. 'vieux pirate male')",
+                    createBtn: "Créer Chat",
+                    filterLabel: "Filtrer par Voix",
+                    startChat: "🎙️ Démarrer Chat",
+                    endChat: "⏹️ Terminer Chat",
+                    disconnected: "Déconnecté",
+                    connected: "Connecté",
+                    connecting: "Connexion...",
+                    error: "Erreur",
+                    micDenied: "Accès au Microphone Refusé"
+                }
+            };
+
+            const countryToLang = {
+                RU: 'ru',
+                ES: 'es',
+                PT: 'pt',
+                JP: 'ja',
+                DE: 'de',
+                KR: 'ko',
+                FR: 'fr'
+            };
+
+            let currentLang = 'en';
+
+            function updateInterfaceLanguage(lang) {
+                currentLang = lang;
+                const t = translations[lang] || translations.en;
+                document.querySelector('h1').innerText = `🎤 ${t.title}`;
+                document.querySelector('[data-key="createChat"]').innerText = t.createChat;
+                promptInput.placeholder = t.promptPlaceholder;
+                document.querySelector('[data-key="createBtn"]').innerText = t.createBtn;
+                document.querySelector('label').innerText = t.filterLabel;
+                startBtn.innerHTML = t.startChat;
+                endBtn.innerHTML = t.endChat;
+            }
+
+            languageSelect.addEventListener('change', () => updateInterfaceLanguage(languageSelect.value));
+
+            async function detectLanguageFromLocation(lat, lng) {
+                try {
+                    const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=en`);
+                    const data = await response.json();
+                    const countryCode = data.countryCode;
+                    const detectedLang = countryToLang[countryCode] || 'en';
+                    languageSelect.value = detectedLang;
+                    updateInterfaceLanguage(detectedLang);
+                } catch (e) {
+                    console.error('Geocode error:', e);
+                    updateInterfaceLanguage('en');
+                }
+            }
+
+            // Get user geolocation
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        userLocation = {
+                            lat: position.coords.latitude,
+                            lng: position.coords.longitude
+                        };
+                        console.log('User location:', userLocation);
+                        detectLanguageFromLocation(userLocation.lat, userLocation.lng);
+                    },
+                    (error) => {
+                        console.error('Geolocation error:', error);
+                        updateInterfaceLanguage('en');
+                    }
+                );
+            } else {
+                console.error('Geolocation not supported');
+                updateInterfaceLanguage('en');
+            }
+
+            // Chat management
             const addedChatIds = new Set();
 
             // Initialize with default chat - but removed at user request
@@ -97,11 +316,11 @@
                 }
             }
 
-            function addCard(chatId, title, prompt, voice = 'Zephyr', image_url = '') {
+            function addCard(chatId, title, prompt, voice = 'Zephyr', image_url = '', likes = 0) {
                 if (addedChatIds.has(chatId)) return;
                 addedChatIds.add(chatId);
                 const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer relative group';
+                card.className = 'card bg-gray-800 rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer relative group';
                 card.dataset.chatId = chatId;
                 const deleteBtn = chatId !== 'default' ? `<button class="absolute top-3 right-3 bg-red-500 hover:bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10">✕</button>` : '';
                 const backgroundImage = image_url || 'data:image/svg+xml;base64,' + btoa('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200" viewBox="0 0 300 200"><rect width="300" height="200" fill="#f3f4f6"/><circle cx="150" cy="80" r="30" fill="#d1d5db"/><path d="M130 110 Q150 130 170 110" stroke="#d1d5db" stroke-width="3" fill="none"/><text x="150" y="170" font-family="Arial" font-size="16" text-anchor="middle" fill="#6b7280">No Image</text></svg>');
@@ -111,8 +330,12 @@
                         ${deleteBtn}
                     </div>
                     <div class="p-4">
-                        <p class="text-gray-700 text-sm leading-relaxed">${prompt}</p>
-                        <div class="mt-2 text-xs text-gray-500">${voice}</div>
+                        <p class="text-gray-300 text-sm leading-relaxed">${prompt}</p>
+                        <div class="mt-2 text-xs text-gray-400">${voice}</div>
+                        <div class="flex items-center mt-2">
+                            <button class="like-btn text-red-500 hover:text-red-600 mr-2">❤️</button>
+                            <span class="likes-count text-sm text-gray-400">${likes}</span>
+                        </div>
                     </div>
                 `;
                 card.addEventListener('click', () => startChatWith(chatId));
@@ -123,6 +346,26 @@
                         deleteChat(chatId, card);
                     });
                 }
+                const likeBtn = card.querySelector('.like-btn');
+                const likesCount = card.querySelector('.likes-count');
+                likeBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    try {
+                        const response = await fetch('/like_chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ chat_id: chatId })
+                        });
+                        const data = await response.json();
+                        if (data.likes !== undefined) {
+                            likesCount.textContent = data.likes;
+                        } else if (data.error) {
+                            alert(data.error);
+                        }
+                    } catch (err) {
+                        console.error('Like error:', err);
+                    }
+                });
                 chatList.appendChild(card);
             }
 
@@ -144,21 +387,51 @@
 
             // Load additional chats from server
             await loadChats();
+            filterCards(); // Apply initial filter
+
+            filterSelect.addEventListener('change', filterCards);
+
+            function filterCards() {
+                const selectedVoice = filterSelect.value;
+                const cards = chatList.querySelectorAll('.card');
+                cards.forEach(card => {
+                    const voiceEl = card.querySelector('.text-xs');
+                    const voice = voiceEl ? voiceEl.textContent : '';
+                    card.style.display = (selectedVoice === '' || voice === selectedVoice) ? 'block' : 'none';
+                });
+            }
+
+            async function translatePrompt(prompt, fromLang) {
+                try {
+                    const response = await fetch('/translate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: prompt, from_lang: fromLang })
+                    });
+                    const data = await response.json();
+                    return data.translated || prompt;
+                } catch (e) {
+                    console.error('Translation error:', e);
+                    return prompt; // Fallback to original
+                }
+            }
 
             createChatBtn.onclick = async () => {
                 const prompt = promptInput.value.trim();
+                const selectedLang = languageSelect.value;
                 if (prompt) {
                     createChatBtn.disabled = true;
                     promptInput.disabled = true;
                     createChatBtn.textContent = 'Creating...';
                     try {
+                        let finalPrompt = await translatePrompt(prompt, selectedLang);
                         const response = await fetch('/create_chat', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ prompt })
+                            body: JSON.stringify({ prompt: finalPrompt })
                         });
                         const { chat_id: chatId, voice, image_url } = await response.json();
-                        addCard(chatId, `Chat ${chatList.children.length}`, prompt, voice, image_url);
+                        addCard(chatId, `Chat ${chatList.children.length}`, finalPrompt, voice, image_url);
                         promptInput.value = '';
                     } catch (e) {
                         console.error('Error creating chat:', e);
@@ -184,11 +457,6 @@
             document.getElementById('chatContainer').style.display = 'block';
             startChat();
         }
-
-        const startBtn = document.getElementById('startBtn');
-        const endBtn = document.getElementById('endBtn');
-        const statusDiv = document.getElementById('status');
-        const visualizer = document.getElementById('visualizer');
 
         // Setup visualizer bars
         const numBars = 20;

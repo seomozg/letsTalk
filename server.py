@@ -21,7 +21,11 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Mount static files if needed (for now just templates)
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/templates", StaticFiles(directory="templates"), name="templates")
+
+# Templates
 templates = Jinja2Templates(directory="templates")
 
 # Configuration
@@ -63,10 +67,13 @@ def load_chats():
                     prompt = data["prompt"]
                     voice = data.get("voice", choose_voice(prompt))
                     image_url = data.get("image_url", "")
+                    likes = data.get("likes", 0)
                     chats[chat_id] = {
                         "prompt": prompt,
                         "voice": voice,
                         "image_url": image_url,
+                        "likes": likes,
+                        "liked_by": data.get("liked_by", []),
                         "config": create_chat_config(prompt, voice)
                     }
                 else:
@@ -143,7 +150,7 @@ async def generate_image(prompt):
 def save_chats():
     chats_file = os.environ.get('CHATS_FILE', 'data/chats.json')
     os.makedirs(os.path.dirname(chats_file), exist_ok=True)
-    saved_chats = {cid: {"prompt": data["prompt"], "voice": data.get("voice", "Zephyr"), "image_url": data.get("image_url", "")} for cid, data in chats.items() if cid != "default" and "voice" in data}
+    saved_chats = {cid: {"prompt": data["prompt"], "voice": data.get("voice", "Zephyr"), "image_url": data.get("image_url", ""), "likes": data.get("likes", 0), "liked_by": data.get("liked_by", [])} for cid, data in chats.items() if cid != "default" and "voice" in data}
     with open(chats_file, 'w') as f:
         json.dump(saved_chats, f)
 
@@ -202,11 +209,17 @@ load_chats()  # Load saved chats after default is set
 
 @app.get("/chats")
 def get_chats():
-    return {cid: {"prompt": data["prompt"], "voice": data.get("voice", "Zephyr"), "image_url": data.get("image_url", "")} for cid, data in chats.items()}
+    return {cid: {"prompt": data["prompt"], "voice": data.get("voice", "Zephyr"), "image_url": data.get("image_url", ""), "likes": data.get("likes", 0)} for cid, data in chats.items()}
 
 @app.get("/", response_class=HTMLResponse)
 async def get(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse("main.html", {"request": request})
+
+@app.get("/chat/{chat_id}", response_class=HTMLResponse)
+async def chat_page(request: Request, chat_id: str):
+    if chat_id not in chats:
+        return templates.TemplateResponse("main.html", {"request": request})  # Redirect to main if not found
+    return templates.TemplateResponse("chat.html", {"request": request, "chat_id": chat_id})
 
 @app.post("/create_chat")
 async def create_chat(request: Request):
@@ -220,6 +233,8 @@ async def create_chat(request: Request):
         "prompt": prompt,
         "voice": voice,
         "image_url": image_url,
+        "likes": 0,
+        "liked_by": [],
         "config": config_new
     }
     save_chats()
@@ -234,6 +249,63 @@ async def delete_chat(request: Request):
         save_chats()
         return {"success": True}
     return {"success": False}
+
+@app.post("/like_chat")
+async def like_chat(request: Request):
+    data = await request.json()
+    chat_id = data.get("chat_id")
+    client_ip = request.client.host
+    if chat_id and chat_id in chats:
+        liked_by = chats[chat_id].get("liked_by", [])
+        if client_ip not in liked_by:
+            liked_by.append(client_ip)
+            chats[chat_id]["liked_by"] = liked_by
+            chats[chat_id]["likes"] += 1
+            save_chats()
+            return {"likes": chats[chat_id]["likes"]}
+        else:
+            return {"error": "Already liked"}
+    return {"error": "Chat not found"}
+
+@app.post("/translate")
+async def translate_text(request: Request):
+    data = await request.json()
+    text = data.get("text", "")
+    from_lang = data.get("from_lang", "")
+    logger.info(f"Translate request: text='{text}', from_lang='{from_lang}'")
+    if not text:
+        logger.info("No text to translate")
+        return {"translated": text}
+
+    # Use DeepSeek API if key is set
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY")
+    logger.info(f"DeepSeek key present: {bool(deepseek_key)}")
+    if not deepseek_key:
+        return {"translated": text}  # Fallback
+
+    try:
+        import httpx
+        response = httpx.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": f"Translate this text to English and determine if it's male or female character, add 'male' or 'female' to the description: \"{text}\""}],
+                "max_tokens": 100
+            },
+            headers={"Authorization": f"Bearer {deepseek_key}"},
+            timeout=10.0
+        )
+        if response.status_code == 200:
+            result = response.json()
+            translated = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            logger.info(f"Translated: '{text}' -> '{translated}'")
+            return {"translated": translated or text}
+        else:
+            logger.error(f"DeepSeek API error: {response.status_code} {response.text}")
+            return {"translated": text}
+    except Exception as e:
+        logger.error(f"Translation error: {e}")
+        return {"translated": text}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
