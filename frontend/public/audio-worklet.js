@@ -4,6 +4,9 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.buffer = [];
     this.targetSamples = 2048; // ~0.128 seconds at 16kHz - larger chunks for testing
     this.isActive = true;
+    this.silenceCounter = 0;
+    this.maxSilenceChunks = 10; // Stop sending after ~1.28 seconds of silence
+    this.hasSound = false;
 
     // Listen for stop messages from main thread
     this.port.onmessage = (event) => {
@@ -38,19 +41,39 @@ class PCMProcessor extends AudioWorkletProcessor {
       }
       // Check if audio has sound (not silence) - lower threshold
       const maxAmplitude = Math.max(...pcm.map(Math.abs));
-      if (maxAmplitude > 100) { // Lower threshold for sound detection
-        // Accumulate in buffer
+      const hasSoundNow = maxAmplitude > 100;
+
+      if (hasSoundNow) {
+        // Sound detected - reset silence counter and mark as having sound
+        this.silenceCounter = 0;
+        this.hasSound = true;
         this.buffer.push(...pcm);
       } else {
-        // Send silence data occasionally to keep connection alive
-        this.buffer.push(...new Int16Array(resampledData.length));
+        // Silence detected
+        if (this.hasSound) {
+          // We had sound before, now silence - increment counter
+          this.silenceCounter++;
+          this.buffer.push(...new Int16Array(resampledData.length));
+        } else {
+          // Still in silence mode - don't accumulate data
+          // This prevents sending silence indefinitely
+        }
       }
 
-      // If buffer has enough data and we're still active, send
-      if (this.buffer.length >= this.targetSamples && this.isActive) {
+      // Send data only if we have sound OR if we're still in the initial silence period
+      const shouldSend = this.hasSound && this.silenceCounter <= this.maxSilenceChunks;
+
+      if (this.buffer.length >= this.targetSamples && this.isActive && shouldSend) {
         const sendBuffer = new Int16Array(this.buffer.slice(0, this.targetSamples));
         this.buffer = this.buffer.slice(this.targetSamples);
         this.port.postMessage(sendBuffer.buffer, [sendBuffer.buffer]);
+      }
+
+      // If we've been silent too long, stop sending entirely until sound resumes
+      if (this.hasSound && this.silenceCounter > this.maxSilenceChunks) {
+        this.hasSound = false;
+        this.buffer = []; // Clear buffer
+        console.log('AudioWorklet: entering silence mode (stopped sending)');
       }
     }
     return true;
