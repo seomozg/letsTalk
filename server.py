@@ -213,7 +213,9 @@ def get_chats():
 
 @app.get("/", response_class=HTMLResponse)
 async def get(request: Request):
-    return templates.TemplateResponse("main.html", {"request": request})
+    # Serve the React frontend
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
 
 @app.get("/chat/{chat_id}", response_class=HTMLResponse)
 async def chat_page(request: Request, chat_id: str):
