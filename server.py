@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # Mount static files
+app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
