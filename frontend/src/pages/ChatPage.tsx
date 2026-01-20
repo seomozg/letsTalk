@@ -333,7 +333,17 @@ export default function ChatPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       {/* Main Content */}
-      <main className="flex flex-1 flex-col items-center justify-center px-4 pb-8">
+      <main className="flex flex-1 flex-col items-center justify-center px-4 pb-8 relative">
+        {/* Back Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate("/")}
+          className="absolute top-4 left-4"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+
         {/* Partner Image */}
         <div className="relative mb-8">
           <div
@@ -362,9 +372,8 @@ export default function ChatPage() {
           )}
         </div>
 
-        {/* Partner Info */}
-        <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{getNameFromPrompt(partner.prompt)}</h1>
-        <p className="mt-2 max-w-sm text-center text-muted-foreground">{partner.prompt}</p>
+        {/* Partner Description */}
+        <p className="max-w-sm text-center text-muted-foreground">{partner.prompt}</p>
 
         {/* Audio Visualizer */}
         <div className="my-8 h-16">
