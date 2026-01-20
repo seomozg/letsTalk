@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py .
 COPY templates/ templates/
 COPY static/ static/
+COPY data/ data/
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app \
