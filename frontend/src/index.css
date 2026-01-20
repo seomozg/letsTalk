@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Audio AI Conversation Product - Design System
+   Calm, modern, trustworthy aesthetic for voice-first experience */
+
+@layer base {
+  :root {
+    /* Warm, calming neutrals */
+    --background: 40 20% 98%;
+    --foreground: 220 20% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 15%;
+
+    /* Warm teal accent - trustworthy and human */
+    --primary: 175 50% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 40 15% 94%;
+    --secondary-foreground: 220 20% 25%;
+
+    --muted: 40 10% 92%;
+    --muted-foreground: 220 10% 50%;
+
+    --accent: 175 40% 95%;
+    --accent-foreground: 175 50% 35%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 40 15% 90%;
+    --input: 40 15% 90%;
+    --ring: 175 50% 42%;
+
+    --radius: 1rem;
+
+    /* Custom tokens for audio UI */
+    --audio-idle: 175 30% 85%;
+    --audio-listening: 175 60% 50%;
+    --audio-speaking: 160 70% 45%;
+    --audio-wave: 175 50% 42%;
+
+    /* Shadows */
+    --shadow-soft: 0 2px 8px -2px hsl(220 20% 15% / 0.08);
+    --shadow-card: 0 4px 20px -4px hsl(220 20% 15% / 0.1);
+    --shadow-elevated: 0 8px 32px -8px hsl(220 20% 15% / 0.15);
+
+    /* Sidebar tokens */
+    --sidebar-background: 40 15% 96%;
+    --sidebar-foreground: 220 20% 25%;
+    --sidebar-primary: 175 50% 42%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 40 10% 92%;
+    --sidebar-accent-foreground: 220 20% 25%;
+    --sidebar-border: 40 15% 88%;
+    --sidebar-ring: 175 50% 42%;
+  }
+
+  .dark {
+    --background: 220 20% 10%;
+    --foreground: 40 15% 95%;
+
+    --card: 220 18% 13%;
+    --card-foreground: 40 15% 95%;
+
+    --popover: 220 18% 13%;
+    --popover-foreground: 40 15% 95%;
+
+    --primary: 175 55% 50%;
+    --primary-foreground: 220 20% 10%;
+
+    --secondary: 220 15% 18%;
+    --secondary-foreground: 40 15% 90%;
+
+    --muted: 220 15% 20%;
+    --muted-foreground: 40 10% 60%;
+
+    --accent: 175 30% 20%;
+    --accent-foreground: 175 55% 70%;
+
+    --destructive: 0 60% 45%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 20%;
+    --input: 220 15% 20%;
+    --ring: 175 55% 50%;
+
+    --audio-idle: 220 15% 30%;
+    --audio-listening: 175 60% 50%;
+    --audio-speaking: 160 70% 50%;
+    --audio-wave: 175 55% 50%;
+
+    --shadow-soft: 0 2px 8px -2px hsl(0 0% 0% / 0.3);
+    --shadow-card: 0 4px 20px -4px hsl(0 0% 0% / 0.4);
+    --shadow-elevated: 0 8px 32px -8px hsl(0 0% 0% / 0.5);
+
+    --sidebar-background: 220 18% 12%;
+    --sidebar-foreground: 40 15% 90%;
+    --sidebar-primary: 175 55% 50%;
+    --sidebar-primary-foreground: 220 20% 10%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 40 15% 90%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 175 55% 50%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "ss02", "cv01";
+  }
+}
+
+@layer utilities {
+  /* Audio visualizer animations */
+  @keyframes audio-wave {
+    0%, 100% {
+      transform: scaleY(0.3);
+    }
+    50% {
+      transform: scaleY(1);
+    }
+  }
+
+  @keyframes audio-pulse {
+    0%, 100% {
+      opacity: 0.6;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.05);
+    }
+  }
+
+  @keyframes gentle-float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-4px);
+    }
+  }
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-audio-wave {
+    animation: audio-wave 0.8s ease-in-out infinite;
+  }
+
+  .animate-audio-pulse {
+    animation: audio-pulse 2s ease-in-out infinite;
+  }
+
+  .animate-gentle-float {
+    animation: gentle-float 3s ease-in-out infinite;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.5s ease-out forwards;
+  }
+
+  /* Staggered delays for wave bars */
+  .delay-75 { animation-delay: 75ms; }
+  .delay-150 { animation-delay: 150ms; }
+  .delay-225 { animation-delay: 225ms; }
+  .delay-300 { animation-delay: 300ms; }
+  .delay-375 { animation-delay: 375ms; }
+}

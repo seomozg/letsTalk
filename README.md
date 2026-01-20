@@ -65,6 +65,11 @@ Multi-language (Russian/English) real-time AI voice chat web application.
    fly deploy
    ```
 
+   Or use the deployment script:
+   ```bash
+   ./deploy_fly.sh
+   ```
+
 5. **Access Your App**
    - Your app will be available at: `https://letstalk-ai-chat.fly.dev` (or custom domain if configured)
    - Fly.io automatically provides HTTPS
