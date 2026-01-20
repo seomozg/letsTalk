@@ -224,13 +224,17 @@ async def chat_page(request: Request, chat_id: str):
 @app.post("/create_chat")
 async def create_chat(request: Request):
     data = await request.json()
-    prompt = data.get("prompt", "")
-    voice = choose_voice(prompt)
-    image_url = await generate_image(prompt)
+    original_prompt = data.get("prompt", "")
+
+    # Translate prompt using DeepSeek
+    translated_prompt = await translate_text_via_deepseek(original_prompt)
+
+    voice = choose_voice(translated_prompt)
+    image_url = await generate_image(translated_prompt)
     chat_id = str(uuid.uuid4())
-    config_new = create_chat_config(prompt, voice)
+    config_new = create_chat_config(translated_prompt, voice)
     chats[chat_id] = {
-        "prompt": prompt,
+        "prompt": translated_prompt,  # Save translated prompt
         "voice": voice,
         "image_url": image_url,
         "likes": 0,
@@ -239,6 +243,37 @@ async def create_chat(request: Request):
     }
     save_chats()
     return {"chat_id": chat_id, "voice": voice, "image_url": image_url}
+
+async def translate_text_via_deepseek(text: str) -> str:
+    """Translate text to English and add gender description using DeepSeek"""
+    deepseek_key = os.environ.get("DEEPSEEK_API_KEY")
+    if not deepseek_key:
+        logger.warning("DeepSeek API key not found, using original text")
+        return text
+
+    try:
+        import httpx
+        response = httpx.post(
+            "https://api.deepseek.com/v1/chat/completions",
+            json={
+                "model": "deepseek-chat",
+                "messages": [{"role": "user", "content": f"Translate this text to English and determine if it's male or female character, add 'male' or 'female' to the description: \"{text}\""}],
+                "max_tokens": 200
+            },
+            headers={"Authorization": f"Bearer {deepseek_key}"},
+            timeout=10.0
+        )
+        if response.status_code == 200:
+            result = response.json()
+            translated = result.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+            logger.info(f"DeepSeek translation: '{text}' -> '{translated}'")
+            return translated or text
+        else:
+            logger.error(f"DeepSeek API error: {response.status_code} {response.text}")
+            return text
+    except Exception as e:
+        logger.error(f"DeepSeek translation error: {e}")
+        return text
 
 @app.post("/delete_chat")
 async def delete_chat(request: Request):

@@ -332,14 +332,6 @@ export default function ChatPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
-      {/* Minimal Header */}
-      <header className="flex items-center justify-between p-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/")}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div className="flex-1" />
-      </header>
-
       {/* Main Content */}
       <main className="flex flex-1 flex-col items-center justify-center px-4 pb-8">
         {/* Partner Image */}
