@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # Mount static files
+app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
@@ -213,7 +214,9 @@ def get_chats():
 
 @app.get("/", response_class=HTMLResponse)
 async def get(request: Request):
-    return templates.TemplateResponse("main.html", {"request": request})
+    # Serve the React frontend
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
 
 @app.get("/chat/{chat_id}", response_class=HTMLResponse)
 async def chat_page(request: Request, chat_id: str):
