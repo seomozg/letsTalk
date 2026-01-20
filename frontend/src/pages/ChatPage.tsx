@@ -54,6 +54,7 @@ export default function ChatPage() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingRef = useRef<boolean>(false);
   const [audioData, setAudioData] = useState<number[]>([]);
@@ -199,6 +200,7 @@ export default function ChatPage() {
 
       // Create AudioWorkletNode for PCM capture
       const workletNode = new AudioWorkletNode(audioContextRef.current, 'pcm-processor');
+      workletNodeRef.current = workletNode;
       workletNode.port.onmessage = (event) => {
         // Don't send audio if muted
         if (isMuted) return;
@@ -289,8 +291,17 @@ export default function ChatPage() {
   };
 
   const handleEndCall = useCallback(() => {
+    // Send stop message to AudioWorklet first
+    if (workletNodeRef.current) {
+      workletNodeRef.current.port.postMessage('stop');
+    }
+
     if (wsRef.current) {
       wsRef.current.close();
+    }
+    if (workletNodeRef.current) {
+      workletNodeRef.current.disconnect();
+      workletNodeRef.current = null;
     }
     if (scriptProcessorRef.current) {
       scriptProcessorRef.current.disconnect();
@@ -365,7 +376,7 @@ export default function ChatPage() {
 
         {/* Audio Visualizer */}
         <div className="my-8 h-16">
-          <AudioVisualizer isActive={isCallActive} state={callState} data={audioData} />
+          <AudioVisualizer isActive={isCallActive} state={callState} data={audioData} sensitivity={1.0} />
         </div>
 
         {/* Controls */}

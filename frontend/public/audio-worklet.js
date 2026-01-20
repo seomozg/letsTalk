@@ -2,7 +2,16 @@ class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.buffer = [];
-    this.targetSamples = 512; // ~0.032 seconds at 16kHz - send more frequently
+    this.targetSamples = 2048; // ~0.128 seconds at 16kHz - larger chunks for testing
+    this.isActive = true;
+
+    // Listen for stop messages from main thread
+    this.port.onmessage = (event) => {
+      if (event.data === 'stop') {
+        this.isActive = false;
+        console.log('AudioWorklet stopped');
+      }
+    };
   }
 
   process(inputs, outputs, parameters) {
@@ -37,8 +46,8 @@ class PCMProcessor extends AudioWorkletProcessor {
         this.buffer.push(...new Int16Array(resampledData.length));
       }
 
-      // If buffer has enough data, send
-      if (this.buffer.length >= this.targetSamples) {
+      // If buffer has enough data and we're still active, send
+      if (this.buffer.length >= this.targetSamples && this.isActive) {
         const sendBuffer = new Int16Array(this.buffer.slice(0, this.targetSamples));
         this.buffer = this.buffer.slice(this.targetSamples);
         this.port.postMessage(sendBuffer.buffer, [sendBuffer.buffer]);

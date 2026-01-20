@@ -2,9 +2,10 @@ interface AudioVisualizerProps {
   isActive: boolean;
   state: "idle" | "listening" | "speaking";
   data?: number[];
+  sensitivity?: number; // New prop for microphone sensitivity (0-1)
 }
 
-export function AudioVisualizer({ isActive, state, data }: AudioVisualizerProps) {
+export function AudioVisualizer({ isActive, state, data, sensitivity = 0.5 }: AudioVisualizerProps) {
   const bars = 20; // More bars like in templates
 
   const getBarColor = () => {
@@ -26,16 +27,22 @@ export function AudioVisualizer({ isActive, state, data }: AudioVisualizerProps)
       return "60px";
     }
 
-    // Calculate volume level
+    // Calculate volume level with improved sensitivity
     let sum = 0;
     for (let i = 0; i < data.length; i++) {
       sum += Math.abs(data[i] - 128);
     }
-    const volume = sum / data.length / 128;
+    const rawVolume = sum / data.length / 128;
 
-    // Amplify and add some randomness for animation
-    const amplified = Math.min(1, volume * 5);
-    const height = Math.max(10, amplified * 50 + Math.random() * 10);
+    // Apply sensitivity multiplier (higher sensitivity = more responsive)
+    // sensitivity ranges from 0-1, where 1 is most sensitive
+    const sensitivityMultiplier = 1 + (sensitivity * 9); // 1x to 10x amplification for much higher sensitivity
+    const volume = Math.min(1, rawVolume * sensitivityMultiplier);
+
+    // Better height calculation with more dynamic range
+    const baseHeight = 10;
+    const maxHeight = 60;
+    const height = Math.max(baseHeight, volume * maxHeight + Math.random() * 5);
     return `${height}px`;
   };
 
