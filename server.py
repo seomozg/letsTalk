@@ -7,7 +7,7 @@ import uuid as uuid
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, Request, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, Response
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from google import genai
@@ -217,12 +217,6 @@ async def get(request: Request):
     # Serve the React frontend
     with open("static/index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read(), status_code=200)
-
-@app.get("/audio-worklet.js")
-async def get_audio_worklet():
-    # Serve the AudioWorklet from static directory
-    with open("static/audio-worklet.js", "r", encoding="utf-8") as f:
-        return Response(content=f.read(), media_type="application/javascript")
 
 @app.get("/chat/{chat_id}", response_class=HTMLResponse)
 async def chat_page(request: Request, chat_id: str):
