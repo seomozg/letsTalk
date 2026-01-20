@@ -363,8 +363,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     if data["type"] == "audio":
                         # Audio data from client (base64 encoded PCM)
                         audio_bytes = base64.b64decode(data["data"])
+                        # Using deprecated method for now - will be updated when API stabilizes
                         await session.send(input={"data": audio_bytes, "mime_type": "audio/pcm"})
-                    
+
                     elif data["type"] == "text":
                         # Text message if we want to support text input too
                         await session.send(input=data["data"], end_of_turn=True)
