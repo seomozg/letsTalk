@@ -27,22 +27,23 @@ export function AudioVisualizer({ isActive, state, data, sensitivity = 0.5 }: Au
       return "60px";
     }
 
-    // Calculate volume level with improved sensitivity
-    let sum = 0;
+    // Calculate RMS volume for better response
+    let sumSquares = 0;
     for (let i = 0; i < data.length; i++) {
-      sum += Math.abs(data[i] - 128);
+      const normalized = (data[i] - 128) / 128;
+      sumSquares += normalized * normalized;
     }
-    const rawVolume = sum / data.length / 128;
+    const rms = Math.sqrt(sumSquares / data.length);
 
-    // Apply sensitivity multiplier (higher sensitivity = more responsive)
-    // sensitivity ranges from 0-1, where 1 is most sensitive
-    const sensitivityMultiplier = 1 + (sensitivity * 9); // 1x to 10x amplification for much higher sensitivity
-    const volume = Math.min(1, rawVolume * sensitivityMultiplier);
+    const sensitivityMultiplier = 1 + (sensitivity * 14); // 1x to 15x
+    const baseVolume = Math.min(1, rms * sensitivityMultiplier);
 
     // Better height calculation with more dynamic range
-    const baseHeight = 10;
-    const maxHeight = 60;
-    const height = Math.max(baseHeight, volume * maxHeight + Math.random() * 5);
+    const baseHeight = 8;
+    const maxHeight = 70;
+    const variationSeed = Math.sin(index * 1.7 + baseVolume * 10);
+    const variation = 0.6 + Math.abs(variationSeed) * 0.7;
+    const height = Math.max(baseHeight, baseVolume * variation * maxHeight + Math.random() * 6);
     return `${height}px`;
   };
 

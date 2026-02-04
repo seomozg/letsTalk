@@ -25,6 +25,14 @@ export interface LikeChatResponse {
   likes: number;
 }
 
+export interface DeleteCharacterRequest {
+  chat_id: string;
+}
+
+export interface DeleteCharacterResponse {
+  success: boolean;
+}
+
 export interface TranslateRequest {
   text: string;
   from_lang: string;
@@ -68,6 +76,18 @@ export const api = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to translate');
+    return response.json();
+  },
+
+  deleteCharacter: async (
+    data: DeleteCharacterRequest,
+  ): Promise<DeleteCharacterResponse> => {
+    const response = await fetch(`${API_BASE}/service/delete_character`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to delete character');
     return response.json();
   },
 };

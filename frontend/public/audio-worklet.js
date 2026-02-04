@@ -2,7 +2,7 @@ class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
     this.buffer = [];
-    this.targetSamples = 2048; // ~0.128 seconds at 16kHz - larger chunks for testing
+    this.targetSamples = 1024; // ~0.064 seconds at 16kHz for lower latency
     this.isActive = true;
     this.silenceCounter = 0;
     this.maxSilenceChunks = 10; // Stop sending after ~1.28 seconds of silence
@@ -39,9 +39,9 @@ class PCMProcessor extends AudioWorkletProcessor {
       for (let i = 0; i < resampledData.length; i++) {
         pcm[i] = Math.max(-32768, Math.min(32767, resampledData[i] * 32768));
       }
-      // Check if audio has sound (not silence) - lower threshold
+      // Check if audio has sound (not silence)
       const maxAmplitude = Math.max(...pcm.map(Math.abs));
-      const hasSoundNow = maxAmplitude > 100;
+      const hasSoundNow = maxAmplitude > 700; // higher threshold to ignore noise
 
       if (hasSoundNow) {
         // Sound detected - reset silence counter and mark as having sound

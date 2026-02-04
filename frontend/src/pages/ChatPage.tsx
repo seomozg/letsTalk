@@ -36,6 +36,11 @@ const mockPartners: Record<string, { name: string; description: string; image: s
 };
 
 type CallState = "idle" | "listening" | "speaking";
+type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+};
 
 export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
@@ -45,7 +50,9 @@ export default function ChatPage() {
   const [isMuted, setIsMuted] = useState(false);
   const [partner, setPartner] = useState<{ prompt: string; voice: string; image: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const { t } = useLanguage();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isSttActive, setIsSttActive] = useState(false);
+  const { t, language } = useLanguage();
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -59,6 +66,7 @@ export default function ChatPage() {
   const isPlayingRef = useRef<boolean>(false);
   const [audioData, setAudioData] = useState<number[]>([]);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
 
   useEffect(() => {
@@ -129,6 +137,7 @@ export default function ChatPage() {
         setCallState("listening");
         // Start recording after WS is open
         setTimeout(startRecording, 100); // Small delay to ensure WS is ready
+        startSpeechRecognition();
       };
 
       ws.onmessage = (event) => {
@@ -142,6 +151,14 @@ export default function ChatPage() {
             console.log('Decoded audio data length:', audioData.length);
             queueAudio(audioData);
             setCallState("speaking");
+          } else if (data.type === 'text') {
+            const text = (data.data || data.text || "").toString();
+            if (text.trim()) {
+              setMessages((prev) => [
+                ...prev,
+                { id: crypto.randomUUID(), role: "assistant", text },
+              ]);
+            }
           }
         } catch (error) {
           console.error('Error processing WebSocket message:', error);
@@ -156,6 +173,7 @@ export default function ChatPage() {
         console.log('WebSocket closed, code:', event.code, 'reason:', event.reason);
         setIsCallActive(false);
         setCallState("idle");
+        stopSpeechRecognition();
       };
 
     } catch (error) {
@@ -222,6 +240,94 @@ export default function ChatPage() {
     } catch (error) {
       console.error('Failed to start recording:', error);
     }
+  };
+
+  const startSpeechRecognition = () => {
+    const SpeechRecognitionImpl = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionImpl) {
+      console.warn('SpeechRecognition not supported in this browser');
+      return;
+    }
+
+    if (!recognitionRef.current) {
+      const recognition = new SpeechRecognitionImpl();
+      const languageMap: Record<string, string> = {
+        en: 'en-US',
+        es: 'es-ES',
+        ru: 'ru-RU',
+        fr: 'fr-FR',
+        de: 'de-DE',
+        ja: 'ja-JP',
+        zh: 'zh-CN',
+      };
+      recognition.lang = languageMap[language] ?? 'en-US';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interim = '';
+        let finalText = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          const transcript = result[0].transcript;
+          if (result.isFinal) {
+            finalText += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        if (finalText.trim()) {
+          setMessages((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), role: "user", text: finalText.trim() },
+          ]);
+        }
+      };
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('SpeechRecognition error', event.error);
+      };
+
+      recognition.onend = () => {
+        setIsSttActive(false);
+        if (isCallActive) {
+          try {
+            recognition.start();
+            setIsSttActive(true);
+          } catch (error) {
+            console.error('Failed to restart SpeechRecognition', error);
+          }
+        }
+      };
+
+      recognitionRef.current = recognition;
+    }
+    if (recognitionRef.current) {
+      recognitionRef.current.lang = ( {
+        en: 'en-US',
+        es: 'es-ES',
+        ru: 'ru-RU',
+        fr: 'fr-FR',
+        de: 'de-DE',
+        ja: 'ja-JP',
+        zh: 'zh-CN',
+      }[language] ?? 'en-US');
+    }
+
+    try {
+      recognitionRef.current.start();
+      setIsSttActive(true);
+    } catch (error) {
+      console.error('Failed to start SpeechRecognition', error);
+    }
+  };
+
+  const stopSpeechRecognition = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsSttActive(false);
   };
 
   const createAudioBuffer = (audioData: string): AudioBuffer | null => {
@@ -310,6 +416,7 @@ export default function ChatPage() {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
     }
+    stopSpeechRecognition();
     // Clear audio queue
     audioQueueRef.current = [];
     isPlayingRef.current = false;
@@ -377,7 +484,7 @@ export default function ChatPage() {
 
         {/* Audio Visualizer */}
         <div className="my-8 h-16">
-          <AudioVisualizer isActive={isCallActive} state={callState} data={audioData} sensitivity={1.0} />
+          <AudioVisualizer isActive={isCallActive} state={callState} data={audioData} sensitivity={2.5} />
         </div>
 
         {/* Controls */}
@@ -417,6 +524,42 @@ export default function ChatPage() {
             Tap to start your voice conversation
           </p>
         )}
+
+        <section className="mt-10 w-full max-w-2xl">
+          <div className="mb-3 flex items-center justify-between text-xs text-muted-foreground">
+            <span>{t('dialogTitle') ?? 'Dialog'}</span>
+            <span>{isSttActive ? t('sttActive') ?? 'STT Active' : t('sttInactive') ?? 'STT Inactive'}</span>
+          </div>
+          <div className="space-y-3">
+            {messages.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
+                {t('noMessages') ?? 'No messages yet.'}
+              </div>
+            ) : (
+              messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className="flex max-w-[80%] flex-col gap-1">
+                    <span className={`text-[11px] uppercase tracking-wide ${message.role === 'user' ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {message.role === 'user' ? t('youLabel') ?? 'You' : t('aiLabel') ?? 'AI'}
+                    </span>
+                    <div
+                      className={`rounded-2xl px-4 py-2 text-sm shadow-sm ${
+                        message.role === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-secondary-foreground'
+                      }`}
+                    >
+                      <p className="whitespace-pre-wrap">{message.text}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
       </main>
     </div>
   );

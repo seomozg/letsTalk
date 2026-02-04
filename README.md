@@ -56,8 +56,8 @@ Multi-language (Russian/English) real-time AI voice chat web application.
    # Required: Set your Gemini API key
    fly secrets set GEMINI_API_KEY=your_actual_gemini_api_key_here
 
-   # Optional: Set Kie.ai API key for image generation
-   fly secrets set KIE_API_KEY=your_kie_api_key_here
+   # Optional: Set FAL API key for image generation
+   fly secrets set FAL_API_KEY=your_fal_api_key_here
    ```
 
 4. **Deploy to Fly.io**
@@ -112,7 +112,7 @@ Multi-language (Russian/English) real-time AI voice chat web application.
 - 🔒 **HTTPS security** - SSL/TLS encryption required
 - 🏗️ **Production ready** - Nginx reverse proxy, health checks
 - 🗣️ **Multiple personas** - Create custom chat characters with unique voices and images
-- 🎨 **AI image generation** - Automatic avatar creation for new chats using Kie.ai
+- 🎨 **AI image generation** - Automatic avatar creation for new chats using fal.ai (z-image turbo)
 
 ## 🏗️ Architecture
 
@@ -140,7 +140,7 @@ Multi-language (Russian/English) real-time AI voice chat web application.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GEMINI_API_KEY` | - | **Required** - Your Gemini API key |
-| `KIE_API_KEY` | - | **Optional** - Your Kie.ai API key for image generation |
+| `FAL_API_KEY` | - | **Optional** - Your fal.ai API key for image generation |
 | `PORT` | 8000 | Server port |
 | `HOST` | 0.0.0.0 | Host binding |
 

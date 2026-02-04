@@ -2,12 +2,13 @@ import os
 import asyncio
 import json
 import base64
+from pathlib import Path
 import logging
 import uuid as uuid
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, Request, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from google import genai
@@ -21,9 +22,15 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
+chats_file_path = Path(os.environ.get("CHATS_FILE", "data/chats.json"))
+data_dir = chats_file_path.parent
+generated_dir = Path(os.environ.get("GENERATED_DIR", str(data_dir / "generated")))
+generated_dir.mkdir(parents=True, exist_ok=True)
+
 # Mount static files
 app.mount("/assets", StaticFiles(directory="static/assets"), name="assets")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/generated", StaticFiles(directory=str(generated_dir)), name="generated")
 app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 
 # Templates
@@ -48,18 +55,18 @@ client = genai.Client(
     api_key=api_key,
 )
 
-kie_api_key = os.environ.get("KIE_API_KEY")
-if not kie_api_key:
-    print("WARNING: KIE_API_KEY environment variable not found!")
+fal_api_key = os.environ.get("FAL_API_KEY")
+if not fal_api_key:
+    print("WARNING: FAL_API_KEY environment variable not found!")
     print("Image generation will use placeholders.")
-    print("Please set it by running: set KIE_API_KEY=your_actual_api_key_here")
+    print("Please set it by running: set FAL_API_KEY=your_actual_api_key_here")
 
 # Initialize chats storage
 chats = {}
 
 def load_chats():
     global chats
-    chats_file = os.environ.get('CHATS_FILE', 'data/chats.json')
+    chats_file = str(chats_file_path)
     if os.path.exists(chats_file):
         with open(chats_file, 'r') as f:
             saved_chats = json.load(f)
@@ -67,7 +74,7 @@ def load_chats():
                 if isinstance(data, dict) and "prompt" in data:
                     prompt = data["prompt"]
                     voice = data.get("voice", choose_voice(prompt))
-                    image_url = data.get("image_url", "")
+                    image_url = normalize_image_url(data.get("image_url", ""))
                     likes = data.get("likes", 0)
                     chats[chat_id] = {
                         "prompt": prompt,
@@ -86,74 +93,68 @@ def load_chats():
                     }
 
 async def generate_image(prompt):
-    if not kie_api_key:
-        logger.info("Kie API key not set, skipping image generation")
+    if not fal_api_key:
+        logger.info("FAL API key not set, skipping image generation")
         return ""  # No image if no API key
     try:
-        image_prompt = f"Chat with {prompt}"
-        headers = {"Authorization": f"Bearer {kie_api_key}"}
-        payload = {
-            "model": "z-image",
-            "input": {
-                "prompt": image_prompt,
-                "aspect_ratio": "1:1"
-            }
+        image_prompt = prompt
+        headers = {
+            "Authorization": f"Key {fal_api_key}",
+            "Content-Type": "application/json",
         }
-        logger.info(f"Starting Kie image generation for prompt: {prompt[:50]}...")
+        payload = {
+            "prompt": image_prompt,
+            "num_inference_steps": 8,
+            "num_images": 1,
+            "output_format": "png",
+        }
+        logger.info(f"Starting FAL image generation for prompt: {prompt[:50]}...")
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
-            # Start generation
-            response = await client.post("https://api.kie.ai/api/v1/jobs/createTask", json=payload, headers=headers)
+            response = await client.post("https://fal.run/fal-ai/z-image/turbo", json=payload, headers=headers)
             data = response.json()
-            task_id = data.get("data", {}).get("taskId")
-            if not task_id:
-                logger.error("No taskId received from Kie API")
-                return ""
-            logger.info(f"Kie task started: {task_id}")
-
-                # Poll for status (max 20 attempts ~1 minute)
-            max_attempts = 20
-            attempt = 0
-            while attempt < max_attempts:
-                await asyncio.sleep(3)  # Wait 3 seconds to reduce requests
-                params = {"taskId": task_id}
-                status_resp = await client.get("https://api.kie.ai/api/v1/jobs/recordInfo", params=params, headers=headers)
-                status_data = status_resp.json()
-                task_state = status_data.get("data", {}).get("state", "") if status_data and "data" in status_data else ""
-                logger.info(f"Kie task {task_id} status: {task_state}")
-                if task_state == "success":
-                    result_json_str = status_data.get("data", {}).get("resultJson", "") if "data" in status_data else ""
-                    if result_json_str:
-                        try:
-                            result_json = json.loads(result_json_str)
-                            result_urls = result_json.get("resultUrls", [])
-                            if result_urls:
-                                image_url = result_urls[0]
-                                logger.info(f"Kie image ready: {image_url}")
-                                return image_url
-                        except json.JSONDecodeError:
-                            logger.error("Invalid resultJson")
-                    logger.error(f"Kie task {task_id} completed but no image url")
-                    return ""
-                elif task_state == "failed":
-                    logger.error(f"Kie task {task_id} failed")
-                    return ""
-                elif task_state in ("exception", "") and attempt > 10:
-                    logger.error(f"Kie task {task_id} failed with state: {task_state}")
-                    return ""
-                attempt += 1
-                # Continue polling
-            logger.error(f"Kie task {task_id} timed out")
+            images = data.get("images", []) if isinstance(data, dict) else []
+            if images:
+                image_url = images[0].get("url", "")
+                if image_url:
+                    local_url = await download_image_locally(image_url)
+                    logger.info(f"FAL image ready: {image_url}")
+                    return local_url or image_url
+            logger.error("FAL response did not include image url")
             return ""
     except Exception as e:
-        logger.error(f"Error generating image with Kie API: {e}")
+        logger.error(f"Error generating image with FAL API: {e}")
+        return ""
+
+
+async def download_image_locally(image_url: str) -> str:
+    try:
+        static_dir = generated_dir
+        static_dir.mkdir(parents=True, exist_ok=True)
+        filename = f"{uuid.uuid4()}.png"
+        file_path = static_dir / filename
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0)) as client:
+            response = await client.get(image_url)
+            response.raise_for_status()
+            file_path.write_bytes(response.content)
+        return f"/generated/{filename}"
+    except Exception as e:
+        logger.error(f"Failed to download image: {e}")
         return ""
 
 def save_chats():
-    chats_file = os.environ.get('CHATS_FILE', 'data/chats.json')
+    chats_file = str(chats_file_path)
     os.makedirs(os.path.dirname(chats_file), exist_ok=True)
     saved_chats = {cid: {"prompt": data["prompt"], "voice": data.get("voice", "Zephyr"), "image_url": data.get("image_url", ""), "likes": data.get("likes", 0), "liked_by": data.get("liked_by", [])} for cid, data in chats.items() if cid != "default" and "voice" in data}
     with open(chats_file, 'w') as f:
         json.dump(saved_chats, f)
+
+
+def normalize_image_url(image_url: str) -> str:
+    if not image_url:
+        return ""
+    if image_url.startswith("/static/generated/"):
+        return image_url.replace("/static/generated/", "/generated/")
+    return image_url
 
 def choose_voice(prompt):
     prompt_lower = prompt.lower()
@@ -218,11 +219,23 @@ async def get(request: Request):
     with open("static/index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read(), status_code=200)
 
+
+@app.get("/audio-worklet.js")
+async def audio_worklet():
+    return FileResponse("static/audio-worklet.js", media_type="application/javascript")
+
 @app.get("/chat/{chat_id}", response_class=HTMLResponse)
 async def chat_page(request: Request, chat_id: str):
     if chat_id not in chats:
         return templates.TemplateResponse("main.html", {"request": request})  # Redirect to main if not found
-    return templates.TemplateResponse("chat.html", {"request": request, "chat_id": chat_id})
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
+
+
+@app.get("/characters", response_class=HTMLResponse)
+async def characters_page(request: Request):
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return HTMLResponse(content=f.read(), status_code=200)
 
 @app.post("/create_chat")
 async def create_chat(request: Request):
@@ -280,6 +293,17 @@ async def translate_text_via_deepseek(text: str) -> str:
 
 @app.post("/delete_chat")
 async def delete_chat(request: Request):
+    data = await request.json()
+    chat_id = data.get("chat_id")
+    if chat_id and chat_id in chats and chat_id != "default":
+        del chats[chat_id]
+        save_chats()
+        return {"success": True}
+    return {"success": False}
+
+
+@app.post("/service/delete_character")
+async def delete_character(request: Request):
     data = await request.json()
     chat_id = data.get("chat_id")
     if chat_id and chat_id in chats and chat_id != "default":

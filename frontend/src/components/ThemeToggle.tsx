@@ -5,7 +5,14 @@ import { Button } from "@/components/ui/button";
 export function ThemeToggle() {
   const [isDark, setIsDark] = useState(() => {
     if (typeof window !== "undefined") {
-      return document.documentElement.classList.contains("dark");
+      const stored = window.localStorage.getItem("theme");
+      if (stored) {
+        return stored === "dark";
+      }
+      if (document.documentElement.classList.contains("dark")) {
+        return true;
+      }
+      return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
     }
     return false;
   });
@@ -13,8 +20,10 @@ export function ThemeToggle() {
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add("dark");
+      window.localStorage.setItem("theme", "dark");
     } else {
       document.documentElement.classList.remove("dark");
+      window.localStorage.setItem("theme", "light");
     }
   }, [isDark]);
 

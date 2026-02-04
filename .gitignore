@@ -47,3 +47,5 @@ tmp/
 temp/
 run_server.bat
 chats.json
+data/chats.json
+data/generated/
