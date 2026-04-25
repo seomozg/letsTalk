@@ -37,7 +37,7 @@ app.mount("/templates", StaticFiles(directory="templates"), name="templates")
 templates = Jinja2Templates(directory="templates")
 
 # Configuration
-MODEL = "models/gemini-2.5-flash-native-audio-preview-09-2025"
+MODEL = "models/gemini-3.1-flash-live-preview"
 SEND_SAMPLE_RATE = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHANNELS = 1
@@ -188,11 +188,19 @@ def create_chat_config(prompt="You are a helpful audio chat assistant.", voice="
     system_text = prompt
     
     return types.LiveConnectConfig(
-        response_modalities=[types.Modality.AUDIO],  # We want audio response
+        response_modalities=["AUDIO"],
+        media_resolution="MEDIA_RESOLUTION_MEDIUM",
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=voice)
             )
+        ),
+        realtime_input_config=types.RealtimeInputConfig(
+            automatic_activity_detection=types.AutomaticActivityDetection(disabled=False)
+        ),
+        context_window_compression=types.ContextWindowCompressionConfig(
+            trigger_tokens=104857,
+            sliding_window=types.SlidingWindow(target_tokens=52428),
         ),
         system_instruction=types.Content(
             parts=[
@@ -396,25 +404,48 @@ async def websocket_endpoint(websocket: WebSocket):
         async with client.aio.live.connect(model=MODEL, config=current_config) as session:
             logger.info("Connected to Gemini Live API")
             
+            # Use dict to avoid nonlocal issues
+            state = {"awaiting_response": False}
+
             # Create a task to receive from Gemini and send to client
             async def receive_from_gemini():
+                logger.info("✅ Gemini receive task started")
                 while True:
                     try:
-                        turn = session.receive()
-                        async for response in turn:
+                        async for response in session.receive():
+                            logger.info(f"📥 Got Gemini response type: {type(response)}")
                             if response.data:
                                 # Send audio data to client
+                                logger.info("✅ Received audio from Gemini: %s bytes", len(response.data))
                                 await websocket.send_json({
                                     "type": "audio",
                                     "data": base64.b64encode(response.data).decode("utf-8")
                                 })
                             if response.text:
-                                logger.info(f"Gemini Text: {response.text}")
+                                logger.info(f"✅ Gemini Text: {response.text}")
+                                # Reset awaiting flag after response
+                                state["awaiting_response"] = False
+                            if response.server_content:
+                                logger.info(f"✅ Gemini turn complete")
+                                state["awaiting_response"] = False
                     except Exception as e:
-                        logger.error(f"Error receiving from Gemini: {e}")
+                        logger.error(f"❌ Error receiving from Gemini: {e}", exc_info=True)
                         break
+                logger.info("⚠️ Gemini receive task exited")
 
+            last_audio_time = 0
+            auto_end_task = None
+            
             receive_task = asyncio.create_task(receive_from_gemini())
+            
+            async def auto_end_turn():
+                try:
+                    await asyncio.sleep(0.5)
+                    logger.info("⏱️ AUTO: Sending audio_stream_end to Gemini")
+                    await session.send_realtime_input(audio_stream_end=True)
+                    state["awaiting_response"] = True
+                except Exception as e:
+                    logger.error(f"❌ Ошибка в auto_end_turn: {e}")
 
             try:
                 while True:
@@ -425,12 +456,28 @@ async def websocket_endpoint(websocket: WebSocket):
                     if data["type"] == "audio":
                         # Audio data from client (base64 encoded PCM)
                         audio_bytes = base64.b64decode(data["data"])
-                        # Using deprecated method for now - will be updated when API stabilizes
-                        await session.send(input={"data": audio_bytes, "mime_type": "audio/pcm"})
+                        await session.send_realtime_input(
+                            audio=types.Blob(data=audio_bytes, mime_type="audio/pcm")
+                        )
+                        
+                        # Cancel previous auto end task
+                        if auto_end_task:
+                            auto_end_task.cancel()
+                        # Schedule new auto end after 0.5 sec silence
+                        auto_end_task = asyncio.create_task(auto_end_turn())
+
+                    elif data["type"] == "end_of_turn":
+                        logger.info("Sending audio_stream_end to Gemini")
+                        if auto_end_task:
+                            auto_end_task.cancel()
+                        await session.send_realtime_input(audio_stream_end=True)
 
                     elif data["type"] == "text":
                         # Text message if we want to support text input too
-                        await session.send(input=data["data"], end_of_turn=True)
+                        await session.send_client_content(
+                            turns=[types.Content(role="user", parts=[types.Part(text=data["data"])])],
+                            turn_complete=True,
+                        )
 
             except WebSocketDisconnect:
                 logger.info("Client disconnected")
