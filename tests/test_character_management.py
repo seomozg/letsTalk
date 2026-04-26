@@ -67,6 +67,8 @@ def test_generate_image_uses_fal_endpoint(monkeypatch):
     client_mock.post = fake_post
     monkeypatch.setattr(server.httpx, "AsyncClient", lambda *a, **k: client_mock)
 
+    monkeypatch.setattr(server, "download_image_locally", AsyncMock(return_value="/generated/test.png"))
+
     result = asyncio.run(server.generate_image("prompt"))
 
-    assert result == "https://example.com/image.png"
+    assert result == "/generated/test.png"

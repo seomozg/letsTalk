@@ -20,12 +20,12 @@ import traceback
 import cv2
 import pyaudio
 import PIL.Image
-import mss
 
 import argparse
 
 from google import genai
 from google.genai import types
+from google.genai.types import Type
 
 FORMAT = pyaudio.paInt16
 CHANNELS = 1
@@ -33,7 +33,7 @@ SEND_SAMPLE_RATE = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE = 1024
 
-MODEL = "models/gemini-2.5-flash-native-audio-preview-09-2025"
+MODEL = "models/gemini-3.1-flash-live-preview"
 
 DEFAULT_MODE = "camera"
 
@@ -54,8 +54,8 @@ CONFIG = types.LiveConnectConfig(
         )
     ),
     context_window_compression=types.ContextWindowCompressionConfig(
-        trigger_tokens=25600,
-        sliding_window=types.SlidingWindow(target_tokens=12800),
+        trigger_tokens=104857,
+        sliding_window=types.SlidingWindow(target_tokens=52428),
     ),
 )
 
@@ -75,6 +75,8 @@ class AudioLoop:
         self.receive_audio_task = None
         self.play_audio_task = None
 
+        self.audio_stream = None
+
     async def send_text(self):
         while True:
             text = await asyncio.to_thread(
@@ -83,7 +85,8 @@ class AudioLoop:
             )
             if text.lower() == "q":
                 break
-            await self.session.send(input=text or ".", end_of_turn=True)
+            if self.session is not None:
+                await self.session.send(input=text or ".", end_of_turn=True)
 
     def _get_frame(self, cap):
         # Read the frameq
@@ -120,12 +123,17 @@ class AudioLoop:
 
             await asyncio.sleep(1.0)
 
-            await self.out_queue.put(frame)
+            if self.out_queue is not None:
+                await self.out_queue.put(frame)
 
         # Release the VideoCapture object
         cap.release()
 
     def _get_screen(self):
+        try:
+            import mss  # pytype: disable=import-error # pylint: disable=g-import-not-at-top
+        except ImportError as e:
+            raise ImportError("Please install mss package using 'pip install mss'") from e
         sct = mss.mss()
         monitor = sct.monitors[0]
 
@@ -151,12 +159,15 @@ class AudioLoop:
 
             await asyncio.sleep(1.0)
 
-            await self.out_queue.put(frame)
+            if self.out_queue is not None:
+                await self.out_queue.put(frame)
 
     async def send_realtime(self):
         while True:
-            msg = await self.out_queue.get()
-            await self.session.send(input=msg)
+            if self.out_queue is not None:
+                msg = await self.out_queue.get()
+                if self.session is not None:
+                    await self.session.send(input=msg)
 
     async def listen_audio(self):
         mic_info = pya.get_default_input_device_info()
@@ -175,25 +186,27 @@ class AudioLoop:
             kwargs = {}
         while True:
             data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
-            await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+            if self.out_queue is not None:
+                await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
 
     async def receive_audio(self):
         "Background task to reads from the websocket and write pcm chunks to the output queue"
         while True:
-            turn = self.session.receive()
-            async for response in turn:
-                if data := response.data:
-                    self.audio_in_queue.put_nowait(data)
-                    continue
-                if text := response.text:
-                    print(text, end="")
+            if self.session is not None:
+                turn = self.session.receive()
+                async for response in turn:
+                    if data := response.data:
+                        self.audio_in_queue.put_nowait(data)
+                        continue
+                    if text := response.text:
+                        print(text, end="")
 
-            # If you interrupt the model, it sends a turn_complete.
-            # For interruptions to work, we need to stop playback.
-            # So empty out the audio queue because it may have loaded
-            # much more audio than has played yet.
-            while not self.audio_in_queue.empty():
-                self.audio_in_queue.get_nowait()
+                # If you interrupt the model, it sends a turn_complete.
+                # For interruptions to work, we need to stop playback.
+                # So empty out the audio queue because it may have loaded
+                # much more audio than has played yet.
+                while not self.audio_in_queue.empty():
+                    self.audio_in_queue.get_nowait()
 
     async def play_audio(self):
         stream = await asyncio.to_thread(
@@ -204,8 +217,9 @@ class AudioLoop:
             output=True,
         )
         while True:
-            bytestream = await self.audio_in_queue.get()
-            await asyncio.to_thread(stream.write, bytestream)
+            if self.audio_in_queue is not None:
+                bytestream = await self.audio_in_queue.get()
+                await asyncio.to_thread(stream.write, bytestream)
 
     async def run(self):
         try:
@@ -235,8 +249,9 @@ class AudioLoop:
         except asyncio.CancelledError:
             pass
         except ExceptionGroup as EG:
-            self.audio_stream.close()
-            traceback.print_exception(EG)
+            if self.audio_stream is not None:
+                self.audio_stream.close()
+                traceback.print_exception(EG)
 
 
 if __name__ == "__main__":
@@ -251,3 +266,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main = AudioLoop(video_mode=args.mode)
     asyncio.run(main.run())
+
+

@@ -5,8 +5,9 @@ class PCMProcessor extends AudioWorkletProcessor {
     this.targetSamples = 1024; // ~0.064 seconds at 16kHz for lower latency
     this.isActive = true;
     this.silenceCounter = 0;
-    this.maxSilenceChunks = 10; // Stop sending after ~1.28 seconds of silence
+    this.maxSilenceChunks = 4; // Stop sending after ~0.25 seconds of silence
     this.hasSound = false;
+    this.sentEnd = false;
 
     // Listen for stop messages from main thread
     this.port.onmessage = (event) => {
@@ -47,13 +48,13 @@ class PCMProcessor extends AudioWorkletProcessor {
         // Sound detected - reset silence counter and mark as having sound
         this.silenceCounter = 0;
         this.hasSound = true;
+        this.sentEnd = false;
         this.buffer.push(...pcm);
       } else {
         // Silence detected
         if (this.hasSound) {
           // We had sound before, now silence - increment counter
           this.silenceCounter++;
-          this.buffer.push(...new Int16Array(resampledData.length));
         } else {
           // Still in silence mode - don't accumulate data
           // This prevents sending silence indefinitely
@@ -73,6 +74,10 @@ class PCMProcessor extends AudioWorkletProcessor {
       if (this.hasSound && this.silenceCounter > this.maxSilenceChunks) {
         this.hasSound = false;
         this.buffer = []; // Clear buffer
+        if (!this.sentEnd) {
+          this.port.postMessage({ type: 'end' });
+          this.sentEnd = true;
+        }
         console.log('AudioWorklet: entering silence mode (stopped sending)');
       }
     }

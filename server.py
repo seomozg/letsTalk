@@ -438,6 +438,9 @@ async def websocket_endpoint(websocket: WebSocket):
             
             receive_task = asyncio.create_task(receive_from_gemini())
             
+            # Fix Gemini first message bug - send dummy end of turn
+            await session.send_realtime_input(audio_stream_end=True)
+            
             async def auto_end_turn():
                 try:
                     await asyncio.sleep(0.5)

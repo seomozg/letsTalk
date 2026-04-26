@@ -64,6 +64,7 @@ export default function ChatPage() {
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const audioQueueRef = useRef<AudioBuffer[]>([]);
   const isPlayingRef = useRef<boolean>(false);
+  const hasSentAudioRef = useRef<boolean>(false);
   const [audioData, setAudioData] = useState<number[]>([]);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -77,7 +78,7 @@ export default function ChatPage() {
     let animationId: number;
     if (isCallActive && analyserNode && dataArrayRef.current) {
       const updateAudioData = () => {
-        analyserNode.getByteTimeDomainData(dataArrayRef.current!);
+        analyserNode.getByteFrequencyData(dataArrayRef.current!);
         const data = Array.from(dataArrayRef.current!);
         setAudioData(data);
         animationId = requestAnimationFrame(updateAudioData);
@@ -210,10 +211,10 @@ export default function ChatPage() {
 
       const source = audioContextRef.current.createMediaStreamSource(stream);
       const analyser = audioContextRef.current.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 512;
       source.connect(analyser);
       analyserRef.current = analyser;
-      dataArrayRef.current = new Uint8Array(analyser.fftSize);
+      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
       setAnalyserNode(analyser);
 
       // Create AudioWorkletNode for PCM capture
@@ -222,8 +223,13 @@ export default function ChatPage() {
       workletNode.port.onmessage = (event) => {
         // Don't send audio if muted
         if (isMuted) return;
+        if (event.data && event.data.type === 'end') {
+          hasSentAudioRef.current = false;
+          return;
+        }
 
         const pcm = new Int16Array(event.data);
+        hasSentAudioRef.current = true;
         // Send to server - convert Int16Array to base64
         const uint8Array = new Uint8Array(pcm.buffer);
         const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
@@ -405,6 +411,7 @@ export default function ChatPage() {
     if (wsRef.current) {
       wsRef.current.close();
     }
+    hasSentAudioRef.current = false;
     if (workletNodeRef.current) {
       workletNodeRef.current.disconnect();
       workletNodeRef.current = null;

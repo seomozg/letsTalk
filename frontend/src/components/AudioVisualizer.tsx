@@ -2,11 +2,13 @@ interface AudioVisualizerProps {
   isActive: boolean;
   state: "idle" | "listening" | "speaking";
   data?: number[];
-  sensitivity?: number; // New prop for microphone sensitivity (0-1)
+  sensitivity?: number;
 }
 
-export function AudioVisualizer({ isActive, state, data, sensitivity = 0.5 }: AudioVisualizerProps) {
-  const bars = 20; // More bars like in templates
+export function AudioVisualizer({ isActive, state, data = [], sensitivity = 1 }: AudioVisualizerProps) {
+  const bars = 22;
+  const baseHeight = 6;
+  const maxHeight = 72;
 
   const getBarColor = () => {
     switch (state) {
@@ -19,46 +21,44 @@ export function AudioVisualizer({ isActive, state, data, sensitivity = 0.5 }: Au
     }
   };
 
-  const getBarHeight = (index: number) => {
-    if (!isActive) {
-      return "10px";
-    }
-    if (isActive && (!data || data.length === 0)) {
-      return "60px";
+  const getBins = () => {
+    if (!data.length) {
+      return Array.from({ length: bars }, () => 0);
     }
 
-    // Calculate RMS volume for better response
-    let sumSquares = 0;
-    for (let i = 0; i < data.length; i++) {
-      const normalized = (data[i] - 128) / 128;
-      sumSquares += normalized * normalized;
+    const bins = new Array(bars).fill(0);
+    const binSize = Math.max(1, Math.floor(data.length / bars));
+    for (let i = 0; i < bars; i++) {
+      const start = i * binSize;
+      const end = Math.min(data.length, start + binSize);
+      let sum = 0;
+      for (let j = start; j < end; j++) {
+        sum += data[j];
+      }
+      bins[i] = sum / Math.max(1, end - start);
     }
-    const rms = Math.sqrt(sumSquares / data.length);
-
-    const sensitivityMultiplier = 1 + (sensitivity * 14); // 1x to 15x
-    const baseVolume = Math.min(1, rms * sensitivityMultiplier);
-
-    // Better height calculation with more dynamic range
-    const baseHeight = 8;
-    const maxHeight = 70;
-    const variationSeed = Math.sin(index * 1.7 + baseVolume * 10);
-    const variation = 0.6 + Math.abs(variationSeed) * 0.7;
-    const height = Math.max(baseHeight, baseVolume * variation * maxHeight + Math.random() * 6);
-    return `${height}px`;
+    return bins;
   };
+
+  const bins = getBins().slice(2);
+  const multiplier = 1 + sensitivity * 12;
 
   return (
     <div className="relative flex items-end justify-center gap-1 h-20">
-      {Array.from({ length: bars }).map((_, i) => (
-        <div
-          key={i}
-          className={`w-1 rounded-full transition-all duration-150 ${getBarColor()}`}
-          style={{
-            height: getBarHeight(i),
-            animationDelay: `${i * 50}ms`,
-          }}
-        />
-      ))}
+      {bins.map((value, index) => {
+        const normalized = Math.min(1, (value / 255) * multiplier);
+        const shape = 0.7 + Math.sin(index * 0.9) * 0.2;
+        const height = isActive
+          ? Math.max(baseHeight, normalized * shape * maxHeight)
+          : baseHeight;
+        return (
+          <div
+            key={index}
+            className={`w-1 rounded-full transition-all duration-100 ${getBarColor()}`}
+            style={{ height: `${height}px` }}
+          />
+        );
+      })}
     </div>
   );
 }

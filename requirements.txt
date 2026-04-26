@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 websockets
-google-genai
+google-genai>=1.73.1
 python-multipart
 jinja2
 python-dotenv
